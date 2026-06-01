@@ -17,18 +17,6 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
----@param parent ENode
----@param name string
----@return ENode|nil node
-local function fetch_child(parent, name)
-    local node = GameAPI.get_eui_child_by_name(parent, name)
-    if not node then
-        LuaAPI.log("[CharacterView] 缺少画布节点: " .. name, 1)
-        return nil
-    end
-    return node
-end
-
 ---@param role Role
 local function play_burst(role)
     if not role or not nodes.burst then
@@ -81,13 +69,13 @@ function CharacterView.initialize(canvas)
     lifecycle_generation = lifecycle_generation + 1
     squeeze_generations_by_role_id = {}
     nodes = {
-        full_background = fetch_child(canvas, configuration.nodes.full_background),
-        right_background = fetch_child(canvas, configuration.nodes.right_background),
-        burst = fetch_child(canvas, configuration.nodes.burst),
-        animation_ring = fetch_child(canvas, configuration.nodes.animation_ring),
-        character_image = fetch_child(canvas, configuration.nodes.character_image),
-        character_image_small = fetch_child(canvas, configuration.nodes.character_image_small),
-        click_button = fetch_child(canvas, configuration.nodes.click_button),
+        full_background       = GameAPI.get_eui_child_by_name(canvas, configuration.nodes.full_background),
+        right_background      = GameAPI.get_eui_child_by_name(canvas, configuration.nodes.right_background),
+        burst                 = GameAPI.get_eui_child_by_name(canvas, configuration.nodes.burst),
+        animation_ring        = GameAPI.get_eui_child_by_name(canvas, configuration.nodes.animation_ring),
+        character_image       = GameAPI.get_eui_child_by_name(canvas, configuration.nodes.character_image),
+        character_image_small = GameAPI.get_eui_child_by_name(canvas, configuration.nodes.character_image_small),
+        click_button          = GameAPI.get_eui_child_by_name(canvas, configuration.nodes.click_button),
     }
 end
 
