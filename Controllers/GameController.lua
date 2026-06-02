@@ -12,6 +12,7 @@ local GameConfig = require("Data.GameConfig")
 local GameState = require("Systems.GameState")
 local HeadsUpDisplay = require("UI.HeadsUpDisplay")
 local LotteryController = require("Lottery.LotteryController")
+local MallController = require("Mall.MallController")
 local ShopPanel = require("UI.ShopPanel")
 local ShopSystem = require("Systems.ShopSystem")
 local UIConfig = require("Data.UIConfig")
@@ -84,14 +85,24 @@ local function render_combo_update(session, result)
     end
 end
 
+---Re-evaluate the player's skin tier; sync float-text color on a change.
+---@param session PlayerSession
+local function refresh_skin(session)
+    if CharacterView.update_skin(session.role, session.state.currency.total_brainrot) then
+        FloatText.set_color(session.role, CharacterView.get_active_float_color(session.role))
+    end
+end
+
 ---@param session PlayerSession
 local function initialize_session_views(session)
     local role = session.role
     HeadsUpDisplay.render(role, session.state)
     FloatText.initialize_role(role)
     CharacterView.initialize_role(role)
+    refresh_skin(session)
     ComboBar.initialize_role(role)
     ShopPanel.initialize_role(role)
+    MallController.initialize_role(role)
 
     if launch_button then
         role.set_button_text(launch_button, UIConfig.APP.text.launch)
@@ -150,6 +161,8 @@ function GameController.remove_player_session(role)
     end
 
     player_sessions[role_id] = nil
+    FloatText.cleanup_role(role)
+    CharacterView.cleanup_role(role)
     LuaAPI.log("[GameController] 玩家会话已移除: " .. tostring(role_id), 0)
 end
 
@@ -164,6 +177,7 @@ function GameController.handle_character_click(role)
     local income = CurrencySystem.add_click_income(session.state)
     FloatText.show(role, income)
     CharacterView.play_click_feedback(role)
+    refresh_skin(session)
     HeadsUpDisplay.render(role, session.state)
     if session.click_canvas_open then
         render_shop(session)
@@ -257,6 +271,7 @@ local function register_timers()
             for _, session in pairs(player_sessions) do
                 CurrencySystem.add_passive_income(session.state)
                 HeadsUpDisplay.render(session.role, session.state)
+                refresh_skin(session)
                 if session.click_canvas_open then
                     render_shop(session)
                 end
@@ -294,7 +309,8 @@ function GameController.initialize()
     FloatText.initialize(click_canvas)
     ShopPanel.initialize(click_canvas)
     ComboBar.initialize(click_canvas)
-    LotteryController.initialize(world_canvas, register_trigger)
+    LotteryController.initialize(register_trigger)
+    MallController.initialize(register_trigger)
 
     bind_ui_interactions()
     register_timers()

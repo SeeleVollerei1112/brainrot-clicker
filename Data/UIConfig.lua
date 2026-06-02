@@ -19,10 +19,18 @@ local UIConfig = {
         events = {
             open_click_canvas = "OPEN_CLICK_CANVAS",
             close_click_canvas = "CLOSE_CLICK_CANVAS",
+            open_lottery = "OPEN_LOTTERY_CANVAS",
+            close_lottery = "CLOSE_LOTTERY_CANVAS",
+            open_mall = "OPEN_MALL_CANVAS",
+            close_mall = "CLOSE_MALL_CANVAS",
         },
         buttons = {
             launch = "btn_launch",
             exit = "btn_exit",
+            lottery_open = "btn_lottery_spin",
+            lottery_close = "关闭",
+            mall_open = "btn_shop",
+            mall_close = "mall_btn_close",
         },
         text = {
             launch = "开始点击",
@@ -93,11 +101,46 @@ local UIConfig = {
             rest_color = 0xFFFFFFFF,
             rest_transition = 0.10,
         },
+        -- 皮肤系统：达到 threshold（累计脑腐值 total_brainrot）解锁对应皮肤组。
+        -- 每组同时配置：人物图片 image / 小图 image_small / 背景特效 effect_style /
+        -- burst 颜色 burst。按 threshold 升序排列，index 1 为初始皮肤。
+        -- 飘字颜色自动取该组 burst.rest_color（强制不透明），与背景配套。
+        --
+        -- 类型说明（必须填整数预设编号，非字符串）：
+        --   image / image_small : ImageKey（图片编号，整数）。留空 nil 表示沿用编辑器原贴图。
+        --   effect_style        : AnimationStyleKey（动效样式编号，整数）。留空 nil 则用编辑器原 char_anim_ring。
+        -- TODO(策划)：填入真实图片编号、特效样式编号、阈值数值，并核对 effect_area。
+        reset_image_size = false,                             -- 切换贴图时是否重置节点尺寸（false 保留编辑器尺寸）
+        effect_loop = true,                                   -- 运行时特效节点是否循环播放
+        effect_area = { x = 460, y = 540, w = 600, h = 600 }, -- 运行时特效节点创建位置/尺寸
+        skins = {
+            {
+                threshold = 0,
+                image = nil,        -- 初始皮肤沿用编辑器原贴图
+                image_small = nil,
+                effect_style = nil, -- 初始皮肤沿用编辑器原 char_anim_ring
+                burst = { rest_color = 0x44FF8C00, flash_color = 0xDDFFB030, rest_transition = 0.30 },
+            },
+            {
+                threshold = 1000,
+                image = nil,        -- TODO: 图片编号
+                image_small = nil,  -- TODO: 图片编号（可留 nil 沿用 image）
+                effect_style = nil, -- TODO: 动效样式编号
+                burst = { rest_color = 0x4400B0FF, flash_color = 0xDD60D0FF, rest_transition = 0.30 },
+            },
+            {
+                threshold = 10000,
+                image = nil,        -- TODO: 图片编号
+                image_small = nil,  -- TODO: 图片编号（可留 nil 沿用 image）
+                effect_style = nil, -- TODO: 动效样式编号
+                burst = { rest_color = 0x44C040FF, flash_color = 0xDDD080FF, rest_transition = 0.30 },
+            },
+        },
     },
 
     FLOAT_TEXT = {
         channel_count = 5,
-        waypoint_count = 30,
+        frame_steps = 30,
         step_frames = 1,
         base_x = 460,
         base_y = 820,

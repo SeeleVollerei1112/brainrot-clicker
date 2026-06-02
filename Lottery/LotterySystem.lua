@@ -58,4 +58,16 @@ function LotterySystem.draw()
     }
 end
 
+---Resolve which card (1-based index in LotteryConfig.CARDS) shows the given prize.
+---@param prize_id string
+---@return integer|nil index
+function LotterySystem.index_of_prize(prize_id)
+    for index, card in ipairs(LotteryConfig.CARDS) do
+        if card.prize_id == prize_id then
+            return index
+        end
+    end
+    return nil
+end
+
 return LotterySystem

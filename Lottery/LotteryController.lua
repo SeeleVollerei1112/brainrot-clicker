@@ -1,10 +1,14 @@
 -- ============================================================
 -- Lottery/LotteryController.lua
--- Binds the world-canvas lottery button to the basic draw flow.
+-- 编排层：绑定转盘画布的抽奖按钮，按权重预定结果后驱动转盘动画，
+-- 落定时弹出中奖提示。
 -- ============================================================
 
 local LotteryConfig = require("Lottery.LotteryConfig")
 local LotterySystem = require("Lottery.LotterySystem")
+local LotteryView = require("Lottery.LotteryView")
+local UINodes = require("Data.UINodes")
+local UIConfig = require("Data.UIConfig")
 
 local LotteryController = {}
 
@@ -20,6 +24,10 @@ end
 
 ---@param role Role
 local function handle_spin(role)
+    if LotteryView.is_spinning() then
+        return
+    end
+
     local result = LotterySystem.draw()
     if not result.success or not result.prize then
         LuaAPI.log("[LotteryController] 抽奖失败: " .. tostring(result.reason), 1)
@@ -27,16 +35,69 @@ local function handle_spin(role)
         return
     end
 
-    role.show_tips("恭喜获得：" .. result.prize.name, LotteryConfig.TIP_DURATION)
+    local target_index = LotterySystem.index_of_prize(result.prize.id)
+    if not target_index then
+        LuaAPI.log("[LotteryController] 奖励未配置对应卡片: " .. tostring(result.prize.id), 1)
+        role.show_tips("恭喜获得：" .. result.prize.name, LotteryConfig.TIP_DURATION)
+        return
+    end
+
+    LotteryView.play_spin(role, target_index, function()
+        role.show_tips("恭喜获得：" .. result.prize.name, LotteryConfig.TIP_DURATION)
+        -- TODO: 实际发放奖励（接 CurrencySystem 等），当前仅提示。
+    end)
 end
 
----Bind the optional lottery button on the world canvas.
----@param world_canvas ECanvas|nil
+---打开转盘画布（发送自定义消息，画布在编辑器中绑定了 show_event）。
+---@param role Role
+local function handle_open(role)
+    role.send_ui_custom_event(UIConfig.APP.events.open_lottery, {})
+end
+
+---关闭转盘画布（发送自定义消息，画布在编辑器中绑定了 hide_event）。
+---@param role Role
+local function handle_close(role)
+    role.send_ui_custom_event(UIConfig.APP.events.close_lottery, {})
+end
+
+---绑定转盘画布的开关导航与抽奖按钮。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
-function LotteryController.initialize(world_canvas, register_trigger)
-    local spin_button = fetch_child(world_canvas, LotteryConfig.BUTTON_NODE_NAME)
+function LotteryController.initialize(register_trigger)
+    LotteryView.initialize()
+
+    -- 世界画布的入口按钮：点击弹出转盘画布
+    local open_button = UINodes[UIConfig.APP.buttons.lottery_open]
+    if open_button then
+        register_trigger(
+            { EVENT.EUI_NODE_TOUCH_EVENT, open_button, UIConfig.TOUCH.CLICK },
+            function(event_name, actor, data)
+                if data and data.role then
+                    handle_open(data.role)
+                end
+            end
+        )
+    else
+        LuaAPI.log("[LotteryController] 缺少入口按钮节点: " .. UIConfig.APP.buttons.lottery_open, 1)
+    end
+
+    -- 转盘画布内的关闭按钮：点击退出转盘画布
+    local close_button = fetch_child(UINodes[LotteryConfig.CANVAS_NAME], UIConfig.APP.buttons.lottery_close)
+    if close_button then
+        register_trigger(
+            { EVENT.EUI_NODE_TOUCH_EVENT, close_button, UIConfig.TOUCH.CLICK },
+            function(event_name, actor, data)
+                if data and data.role then
+                    handle_close(data.role)
+                end
+            end
+        )
+    else
+        LuaAPI.log("[LotteryController] 缺少关闭按钮节点: " .. UIConfig.APP.buttons.lottery_close, 1)
+    end
+
+    local spin_button = LotteryView.get_button()
     if not spin_button then
-        LuaAPI.log("[LotteryController] 缺少世界画布节点: " .. LotteryConfig.BUTTON_NODE_NAME, 1)
+        LuaAPI.log("[LotteryController] 缺少抽奖按钮节点: " .. LotteryConfig.BUTTON_NAME, 1)
         return
     end
 
