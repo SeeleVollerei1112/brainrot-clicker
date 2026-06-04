@@ -80,13 +80,6 @@ end
 
 ---@export_plugin
 ---@style button
----@desc DebugTool-连通性测试
-function DebugToolPing()
-	LuaAPI.log("[Debug] DebugToolPing 点击成功", 0)
-end
-
----@export_plugin
----@style button
 ---@desc 设置蛋仔位置
 ---@param role_id RoleID 玩家ID
 ---@param position Vector3 位置
@@ -133,7 +126,7 @@ function BoothSeedTestData(role_id)
 		return
 	end
 	local role = get_debug_role("BoothSeedTestData", role_id)
-	if not role then
+	if not BoothController or not role then
 		return
 	end
 	BoothController.unlock_zone(role, 2)
@@ -157,7 +150,7 @@ function BoothDump(role_id)
 		return
 	end
 	local role = get_debug_role("BoothDump", role_id)
-	if not role then
+	if not role or not BoothController then
 		return
 	end
 	LuaAPI.log("[Debug] 展台当前状态: " .. BoothController.dump_json(role), 0)
@@ -172,7 +165,7 @@ function BoothSaveNow(role_id)
 		return
 	end
 	local role = get_debug_role("BoothSaveNow", role_id)
-	if not role then
+	if not role or not BoothController then
 		return
 	end
 	BoothController.save_now(role)
@@ -188,7 +181,7 @@ function BoothLoadNow(role_id)
 		return
 	end
 	local role = get_debug_role("BoothLoadNow", role_id)
-	if not role then
+	if not role or not BoothPersistence then
 		return
 	end
 	local loaded = BoothPersistence.load(role)
@@ -200,7 +193,7 @@ end
 ---@desc 展台-序列化往返自测(不依赖存档开关)
 function BoothRoundTripTest()
 	LuaAPI.log("[Debug] BoothRoundTripTest 点击", 0)
-	if not load_booth_modules() then
+	if not load_booth_modules() or not BoothState or not BoothPersistence then
 		return
 	end
 
@@ -233,7 +226,7 @@ function BoothUnlockZone(role_id, zone_id)
 		return
 	end
 	local role = get_debug_role("BoothUnlockZone", role_id)
-	if not role then
+	if not role or not BoothController then
 		return
 	end
 	local ok = BoothController.unlock_zone(role, zone_id)
@@ -253,7 +246,7 @@ function BoothPlaceItem(role_id, zone_id, booth_index, item_id)
 		return
 	end
 	local role = get_debug_role("BoothPlaceItem", role_id)
-	if not role then
+	if not role or not BoothController then
 		return
 	end
 	local ok = BoothController.place_item(role, zone_id, booth_index, item_id)

@@ -18,7 +18,6 @@
 
 ---@class BoothItemConfig
 ---@field id integer
----@field name string
 ---@field base_attrs table<string, integer|string>
 
 ---@class BoothConfig
@@ -35,11 +34,11 @@ local BoothConfig = {
 
     ---@type BoothItemConfig[]
     ITEMS = {
-        { id = 101, name = "脑红1", base_attrs = { name = "脑红1", income_per_second = 5, level = 1 } },
-        { id = 102, name = "脑红2", base_attrs = { name = "脑红2", income_per_second = 12, level = 1 } },
-        { id = 103, name = "脑红3", base_attrs = { name = "脑红3", income_per_second = 30, level = 1 } },
-        { id = 104, name = "脑红4", base_attrs = { name = "脑红4", income_per_second = 18, level = 1 } },
-        { id = 105, name = "脑红5", base_attrs = { name = "脑红5", income_per_second = 45, level = 1 } },
+        { id = 101, base_attrs = { name = "脑红1", income_per_second = 5, level = 1 } },
+        { id = 102, base_attrs = { name = "脑红2", income_per_second = 12, level = 1 } },
+        { id = 103, base_attrs = { name = "脑红3", income_per_second = 30, level = 1 } },
+        { id = 104, base_attrs = { name = "脑红4", income_per_second = 18, level = 1 } },
+        { id = 105, base_attrs = { name = "脑红5", income_per_second = 45, level = 1 } },
     },
 }
 

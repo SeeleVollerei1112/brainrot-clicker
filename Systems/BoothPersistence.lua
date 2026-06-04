@@ -16,7 +16,7 @@
 local ArchiveKeys = require("Data.ArchiveKeys")
 local BoothConfig = require("Data.BoothConfig")
 local BoothState = require("Systems.BoothState")
-local dkjson = require("Util.dkjson")
+local Json = require("Util.Json")
 
 local BoothPersistence = {}
 
@@ -84,73 +84,36 @@ local function key_to_int(key)
     return sign * value
 end
 
----@param tbl table
----@param order string[]
----@return table
-local function ordered_table(tbl, order)
-    return setmetatable(tbl, { __jsonorder = order, __jsontype = "object" })
-end
-
----@param tbl table
----@return string[]
-local function sorted_string_keys(tbl)
-    local keys = {}
-    for key in pairs(tbl) do
-        keys[#keys + 1] = tostring(key)
-    end
-    table.sort(keys)
-    return keys
-end
-
----@param tbl table
----@return string[]
-local function sorted_numeric_string_keys(tbl)
-    local keys = sorted_string_keys(tbl)
-    table.sort(keys, function(a, b)
-        local a_number = key_to_int(a)
-        local b_number = key_to_int(b)
-        if a_number == b_number then
-            return a < b
-        end
-        return a_number < b_number
-    end)
-    return keys
-end
-
 -- ---------- serialize ----------
 
----Convert runtime state to a JSON string.
+---Convert runtime state to a JSON string. Zone / booth keys are stringified
+---so they stay JSON objects (only `zones` is a JSON array); Json.encode sorts
+---object keys itself, so the output is already deterministic.
 ---@param state BoothState
 ---@return string json
 function BoothPersistence.to_json(state)
-    -- Unlocked zone ids as a sorted array (deterministic output).
     local zones = {}
     for zone_id in pairs(state.unlocked) do
         zones[#zones + 1] = zone_id
     end
     table.sort(zones)
 
-    -- Placements keyed by stringified zone / booth so they stay JSON objects.
     local placements = {}
     for zone_id, zone_placements in pairs(state.placements) do
         local zone_out = {}
         for booth_index, instance in pairs(zone_placements) do
-            local attr_out = {}
-            for attr, attr_value in pairs(instance.attrs or {}) do
-                attr_out[attr] = attr_value
-            end
-            zone_out[tostring(booth_index)] = ordered_table({
+            zone_out[tostring(booth_index)] = {
                 item_id = instance.item_id,
-                attrs = ordered_table(attr_out, sorted_string_keys(attr_out)),
-            }, { "item_id", "attrs" })
+                attrs = instance.attrs or {},
+            }
         end
-        placements[tostring(zone_id)] = ordered_table(zone_out, sorted_numeric_string_keys(zone_out))
+        placements[tostring(zone_id)] = zone_out
     end
 
-    return dkjson.encode(ordered_table({
+    return Json.encode({
         zones = zones,
-        placements = ordered_table(placements, sorted_numeric_string_keys(placements)),
-    }, { "zones", "placements" }))
+        placements = placements,
+    })
 end
 
 -- ---------- deserialize ----------
@@ -161,7 +124,7 @@ end
 ---@param str string
 ---@return BoothState state
 function BoothPersistence.from_json(str)
-    local data = dkjson.decode(str)
+    local data = Json.decode(str)
     if type(data) ~= "table" then
         return BoothState.new()
     end
