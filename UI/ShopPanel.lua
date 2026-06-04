@@ -94,7 +94,6 @@ end
 local function disable_card_child_touch(role, card)
     local child_nodes = {
         card.background,
-        card.fill,
         card.slot,
         card.icon,
         card.coin,
@@ -138,7 +137,6 @@ local function bind_static_slot(slot_index)
         slot_index = slot_index,
         container = root,
         background = fetch_child(root, node_names.card_prefix .. suffix, true),
-        fill = fetch_child(root, node_names.fill_prefix .. suffix, true),
         slot = fetch_child(root, node_names.slot_prefix .. suffix, true),
         icon = fetch_child(root, node_names.icon_prefix .. suffix, true),
         name = fetch_child(root, node_names.name_prefix .. suffix, true),
@@ -151,7 +149,6 @@ local function bind_static_slot(slot_index)
 
     append_node(card.nodes, card.container)
     append_node(card.nodes, card.background)
-    append_node(card.nodes, card.fill)
     append_node(card.nodes, card.slot)
     append_node(card.nodes, card.icon)
     append_node(card.nodes, card.name)

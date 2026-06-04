@@ -34,7 +34,7 @@ local function get_progress(frame_index)
 end
 
 ---@param frame_index integer
----@return integer font_size
+---@return integer? font_size
 local function get_font_size(frame_index)
     local progress = get_progress(frame_index)
     return math.tointeger(

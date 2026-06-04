@@ -36,6 +36,55 @@
 -- 配合 dropDown 使用, 设置枚举选项
 
 
+local BoothController = nil
+local BoothState = nil
+local BoothPersistence = nil
+
+local function load_booth_modules()
+	if BoothController and BoothState and BoothPersistence then
+		return true
+	end
+
+	local ok, module = pcall(require, "Booth.BoothController")
+	if not ok then
+		LuaAPI.log("[Debug] 加载 BoothController 失败: " .. tostring(module), 1)
+		return false
+	end
+	BoothController = module
+
+	ok, module = pcall(require, "Systems.BoothState")
+	if not ok then
+		LuaAPI.log("[Debug] 加载 BoothState 失败: " .. tostring(module), 1)
+		return false
+	end
+	BoothState = module
+
+	ok, module = pcall(require, "Systems.BoothPersistence")
+	if not ok then
+		LuaAPI.log("[Debug] 加载 BoothPersistence 失败: " .. tostring(module), 1)
+		return false
+	end
+	BoothPersistence = module
+
+	return true
+end
+
+local function get_debug_role(action, role_id)
+	LuaAPI.log("[Debug] " .. action .. " 点击 role_id=" .. tostring(role_id), 0)
+	local role = GameAPI.get_role(role_id)
+	if not role then
+		LuaAPI.log("[Debug] " .. action .. " 未找到玩家 role_id=" .. tostring(role_id), 1)
+	end
+	return role
+end
+
+---@export_plugin
+---@style button
+---@desc DebugTool-连通性测试
+function DebugToolPing()
+	LuaAPI.log("[Debug] DebugToolPing 点击成功", 0)
+end
+
 ---@export_plugin
 ---@style button
 ---@desc 设置蛋仔位置
@@ -63,9 +112,152 @@ function SetRoleGameResult(role_id, result)
 	if not role then
 		return
 	end
-	if (result)	then
+	if (result) then
 		role.win()
 	else
 		role.lose()
 	end
+end
+
+-- ============================================================
+-- 展台存档调试按钮（Booth save-layer）
+-- 结果统一用 LuaAPI.log 打到 log.txt（game_execute 无返回值）。
+-- ============================================================
+
+---@export_plugin
+---@style button
+---@desc 展台-填充测试数据并存档
+---@param role_id RoleID 玩家ID
+function BoothSeedTestData(role_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothSeedTestData", role_id)
+	if not role then
+		return
+	end
+	BoothController.unlock_zone(role, 2)
+	BoothController.place_item(role, 1, 0, 101)
+	BoothController.place_item(role, 1, 2, 103)
+	BoothController.place_item(role, 2, 0, 105)
+	-- 体现「实例属性可变」：给区2-台0的物品改属性
+	BoothController.set_item_attr(role, 2, 0, "level", 7)
+	BoothController.set_item_attr(role, 2, 0, "income_per_second", 999)
+	BoothController.set_item_attr(role, 2, 0, "name", "满级古董钟")
+	BoothController.save_now(role)
+	LuaAPI.log("[Debug] 展台测试数据已写入: " .. BoothController.dump_json(role), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-打印当前状态JSON
+---@param role_id RoleID 玩家ID
+function BoothDump(role_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothDump", role_id)
+	if not role then
+		return
+	end
+	LuaAPI.log("[Debug] 展台当前状态: " .. BoothController.dump_json(role), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-立即存档
+---@param role_id RoleID 玩家ID
+function BoothSaveNow(role_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothSaveNow", role_id)
+	if not role then
+		return
+	end
+	BoothController.save_now(role)
+	LuaAPI.log("[Debug] 展台立即存档已触发: " .. BoothController.dump_json(role), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-从存档重新读取并打印
+---@param role_id RoleID 玩家ID
+function BoothLoadNow(role_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothLoadNow", role_id)
+	if not role then
+		return
+	end
+	local loaded = BoothPersistence.load(role)
+	LuaAPI.log("[Debug] 从存档读取的展台状态: " .. BoothPersistence.to_json(loaded), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-序列化往返自测(不依赖存档开关)
+function BoothRoundTripTest()
+	LuaAPI.log("[Debug] BoothRoundTripTest 点击", 0)
+	if not load_booth_modules() then
+		return
+	end
+
+	local state = BoothState.new()
+	BoothState.unlock_zone(state, 2)
+	BoothState.place_item(state, 1, 0, 101)
+	BoothState.place_item(state, 2, 0, 105)
+	BoothState.set_item_attr(state, 2, 0, "level", 7)
+	BoothState.set_item_attr(state, 2, 0, "income_per_second", 999)
+	BoothState.set_item_attr(state, 2, 0, "name", "满级古董钟")
+
+	local json1 = BoothPersistence.to_json(state)
+	local restored = BoothPersistence.from_json(json1)
+	local json2 = BoothPersistence.to_json(restored)
+
+	if json1 == json2 then
+		LuaAPI.log("[Debug] 展台序列化往返自测 PASS: " .. json1, 0)
+	else
+		LuaAPI.log("[Debug] 展台序列化往返自测 FAIL\n  json1=" .. json1 .. "\n  json2=" .. json2, 1)
+	end
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-解锁指定展台区
+---@param role_id RoleID 玩家ID
+---@param zone_id integer 展台区ID
+function BoothUnlockZone(role_id, zone_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothUnlockZone", role_id)
+	if not role then
+		return
+	end
+	local ok = BoothController.unlock_zone(role, zone_id)
+	LuaAPI.log("[Debug] 解锁展台区 " .. tostring(zone_id) .. " 结果=" .. tostring(ok)
+		.. " 状态: " .. BoothController.dump_json(role), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-放置物品
+---@param role_id RoleID 玩家ID
+---@param zone_id integer 展台区ID
+---@param booth_index integer 展台位索引(从0起)
+---@param item_id integer 物品ID
+function BoothPlaceItem(role_id, zone_id, booth_index, item_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothPlaceItem", role_id)
+	if not role then
+		return
+	end
+	local ok = BoothController.place_item(role, zone_id, booth_index, item_id)
+	LuaAPI.log("[Debug] 放置物品 z=" .. tostring(zone_id) .. " b=" .. tostring(booth_index)
+		.. " item=" .. tostring(item_id) .. " 结果=" .. tostring(ok)
+		.. " 状态: " .. BoothController.dump_json(role), 0)
 end

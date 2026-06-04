@@ -54,14 +54,16 @@ local MallConfig = {
             text = "购买",
         },
 
-        -- 侧边栏标签选中视觉（用标签文字背景作为选中底框；按钮始终可点击）：
-        --   未选中 -> 底框隐藏(透明) + 文字白色
-        --   选中   -> 底框显示(白) + 文字黑色
+        -- 侧边栏标签选中视觉（用标签按钮自身不透明度作为选中底框；按钮始终可点击）：
+        --   未选中 -> 按钮透明(opacity=0) + 文字白色
+        --   选中   -> 按钮不透明(opacity=1) + 文字黑色
+        -- 说明：opacity=0 仅隐藏渲染，按钮仍可点击（不同于 set_node_visible(false)）；
+        --       文字 label 是按钮的同级节点，不受按钮不透明度影响，仍正常显示。
         tab = {
             text_selected = 0xFF000000,   -- 选中文字：黑
             text_unselected = 0xFFFFFFFF, -- 未选中文字：白
-            box_shown = 0xFFFFFFFF,        -- 选中：标签底框不透明(白)
-            box_hidden = 0x00FFFFFF,       -- 未选中：标签底框透明(alpha=0)
+            btn_opacity_selected = 1.0,   -- 选中：标签按钮不透明
+            btn_opacity_unselected = 0.0, -- 未选中：标签按钮透明
         },
     },
 
@@ -95,7 +97,7 @@ local MallConfig = {
             label = "mall_tab_lbl_time",
             select_default = false,
             item_suffix_fmt = "_%d_1",     -- time: shop_item_1_1 / shop_slot_1_1 ...
-            buy_fmt = "mall_buy_time_%d",
+            buy_fmt = "mall_buy_time_%d_1",
             items = {
                 -- TODO(策划): 填入真实时间道具名称/图标/价格/货币/效果
                 { id = 2001, index = 1, name = "时间道具1", description = "占位描述", icon_preset = nil, price = 6,  currency = "premium", grant_type = "time_buff", grant_value = 0 },

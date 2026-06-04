@@ -1,11 +1,14 @@
 -- ============================================================
 -- Lottery/LotteryView.lua
--- 转盘抽奖的视觉表现：选中边框在三张卡片间循环（先加速后减速），
--- 每经过一张卡对应指示器亮起后熄灭，最终平滑停在中奖卡。
+-- 转盘抽奖的视觉表现：每张卡片自带一个选中框，转动时在各卡的框之间
+-- 逐一显隐（先加速后减速），最终停在中奖卡——其框保持点亮。
 --
--- 选中边框(选中卡片)位置通过 GameAPI.set_eui_node_horizontal_auto_center
--- 驱动——这是全局节点属性，所有客户端看到同一次转动，因此用单次锁
--- 保证同一时刻只有一次转动。指示器亮灭用 Role 方法，针对触发玩家。
+-- 选中框显隐通过 Role.set_node_visible 驱动，这是 per-Role 属性，因此每个
+-- 玩家各自独立转动、只看到自己的高亮，互不干扰。所有玩家共享同一套框
+-- 节点（显隐互不影响），转动状态按 role_id 分桶维护。
+--
+-- 框节点命名约定：每张卡 card 对应 "选中框_" .. card（前缀硬编码于此），
+-- 由编辑器与卡片对齐摆放。新增卡片无需任何位置配置。
 -- ============================================================
 
 local UINodes = require("Data.UINodes")
@@ -13,21 +16,27 @@ local LotteryConfig = require("Lottery.LotteryConfig")
 
 local LotteryView = {}
 
-local tf = math.tofixed
+-- 选中框节点命名前缀：框名 = FRAME_PREFIX .. 卡片名
+local FRAME_PREFIX = "选中框_"
 
--- 解析后的节点引用
+-- 解析后的共享节点引用（显隐是 per-Role 的，节点本身全局共享）
 local canvas = nil
-local border = nil
 local button = nil
----@type { card:ENode, center_pct:number }[]
+---@type { name:string, card:ENode|nil, frame:ENode|nil }[]
 local cards = {}
 
--- 失效保护 + 单次锁
+-- 全局生命周期代：GAME_INIT / shutdown 时自增，使在途延迟回调失效
 local lifecycle_generation = 0
-local spin_generation = 0
-local is_spinning = false
--- 上次边框停靠的卡片下标（默认中间卡）
-local last_index = 2
+
+-- per-Role 转动状态
+---@type table<RoleID, boolean>
+local is_spinning_by_role = {}
+---@type table<RoleID, integer>  每次转动自增，用于使旧转动的延迟回调失效
+local spin_generation_by_role = {}
+---@type table<RoleID, integer>  上次停靠的卡片下标（决定下次转动起点）
+local last_index_by_role = {}
+---@type table<RoleID, integer>  当前对该玩家点亮的框下标
+local shown_index_by_role = {}
 
 ---@param name string
 ---@return ENode|nil
@@ -35,28 +44,77 @@ local function node(name)
     return UINodes[name]
 end
 
----绑定转盘画布节点。GAME_INIT 时调用一次。
+---@param role Role
+---@return RoleID|nil role_id
+local function get_role_id(role)
+    local control_unit = role and role.get_ctrl_unit()
+    return control_unit and control_unit.get_role_id() or nil
+end
+
+---绑定转盘画布与各卡片的选中框节点。GAME_INIT 时调用一次。
 function LotteryView.initialize()
     lifecycle_generation = lifecycle_generation + 1
-    spin_generation = 0
-    is_spinning = false
-    last_index = 2
+    is_spinning_by_role = {}
+    spin_generation_by_role = {}
+    last_index_by_role = {}
+    shown_index_by_role = {}
 
     canvas = node(LotteryConfig.CANVAS_NAME)
-    border = node(LotteryConfig.BORDER_NAME)
     button = node(LotteryConfig.BUTTON_NAME)
 
     cards = {}
     for index, card in ipairs(LotteryConfig.CARDS) do
+        local frame_name = FRAME_PREFIX .. card.card
+        local frame = node(frame_name)
         cards[index] = {
+            name = card.card,
             card = node(card.card),
-            center_pct = card.center_pct,
+            frame = frame,
         }
+        if not frame then
+            LuaAPI.log("[LotteryView] 缺少选中框节点: " .. frame_name, 1)
+        end
+    end
+end
+
+---为玩家初始化：隐藏其所有选中框并重置该玩家的转动状态。
+---@param role Role
+function LotteryView.initialize_role(role)
+    local role_id = get_role_id(role)
+    if not role_id then
+        return
     end
 
-    if not border then
-        LuaAPI.log("[LotteryView] 缺少选中边框节点: " .. LotteryConfig.BORDER_NAME, 1)
+    for _, entry in ipairs(cards) do
+        if entry.frame then
+            role.set_node_visible(entry.frame, false)
+        end
     end
+
+    is_spinning_by_role[role_id] = false
+    spin_generation_by_role[role_id] = 0
+    last_index_by_role[role_id] = 1
+    shown_index_by_role[role_id] = nil
+end
+
+---玩家离开时：隐藏其框并丢弃其转动状态。
+---@param role Role
+function LotteryView.cleanup_role(role)
+    local role_id = get_role_id(role)
+    if not role_id then
+        return
+    end
+
+    for _, entry in ipairs(cards) do
+        if entry.frame then
+            role.set_node_visible(entry.frame, false)
+        end
+    end
+
+    is_spinning_by_role[role_id] = nil
+    spin_generation_by_role[role_id] = nil
+    last_index_by_role[role_id] = nil
+    shown_index_by_role[role_id] = nil
 end
 
 ---@return ENode|nil button
@@ -64,18 +122,36 @@ function LotteryView.get_button()
     return button
 end
 
+---该玩家当前是否正在转动。
+---@param role Role
 ---@return boolean
-function LotteryView.is_spinning()
-    return is_spinning
+function LotteryView.is_spinning(role)
+    local role_id = get_role_id(role)
+    if not role_id then
+        return false
+    end
+    return is_spinning_by_role[role_id] == true
 end
 
--- 把选中边框移动到第 index 张卡的水平位置（按画布宽度百分比定位）。
+-- 仅对该玩家点亮第 index 张卡的框：熄灭上一个，再点亮当前。
+---@param role Role
+---@param role_id RoleID
 ---@param index integer
-local function move_border(index)
-    if not border then
-        return
+local function show_frame_only(role, role_id, index)
+    local previous = shown_index_by_role[role_id]
+    if previous and previous ~= index then
+        local prev_entry = cards[previous]
+        if prev_entry and prev_entry.frame then
+            role.set_node_visible(prev_entry.frame, false)
+        end
     end
-    GameAPI.set_eui_node_horizontal_auto_center(border, true, true, tf(cards[index].center_pct))
+
+    local entry = cards[index]
+    if entry and entry.frame then
+        role.set_node_visible(entry.frame, true)
+    end
+
+    shown_index_by_role[role_id] = index
 end
 
 -- 计算从 start_index 出发、落在 target_index 所需的总步数（含基础整圈）。
@@ -116,12 +192,17 @@ local function interval_at(k, total)
     return frames
 end
 
----播放一次转动动画，保证停在 target_index，结束后回调 on_complete。
+---为玩家播放一次转动动画，保证停在 target_index，结束后回调 on_complete。
 ---@param role Role
 ---@param target_index integer
 ---@param on_complete fun()
 function LotteryView.play_spin(role, target_index, on_complete)
-    if is_spinning or not border or not role then
+    local role_id = get_role_id(role)
+    if not role_id then
+        if on_complete then on_complete() end
+        return
+    end
+    if is_spinning_by_role[role_id] then
         return
     end
     if not target_index or not cards[target_index] then
@@ -129,29 +210,31 @@ function LotteryView.play_spin(role, target_index, on_complete)
         return
     end
 
-    is_spinning = true
-    spin_generation = spin_generation + 1
-    local my_generation = spin_generation
+    is_spinning_by_role[role_id] = true
+    spin_generation_by_role[role_id] = (spin_generation_by_role[role_id] or 0) + 1
+    local my_generation = spin_generation_by_role[role_id]
     local my_lifecycle = lifecycle_generation
 
-    local total = resolve_total_steps(last_index, target_index)
+    local last_index = last_index_by_role[role_id] or 1
     local n = #cards
+    local total = resolve_total_steps(last_index, target_index)
 
     if button then
         role.set_button_enabled(button, false)
     end
 
     local function is_valid()
-        return my_lifecycle == lifecycle_generation and my_generation == spin_generation
+        return my_lifecycle == lifecycle_generation
+            and my_generation == spin_generation_by_role[role_id]
     end
 
     local function finish(index)
-        last_index = index
-        is_spinning = false
+        last_index_by_role[role_id] = index
+        is_spinning_by_role[role_id] = false
         if button then
             role.set_button_enabled(button, true)
         end
-        -- 边框停在中奖卡片上停留片刻，再弹出提示
+        -- 中奖卡的框保持点亮，停留片刻后再弹出提示。
         LuaAPI.call_delay_frame(math.tointeger(LotteryConfig.SPIN.SETTLE_FRAMES) or 1, function()
             if on_complete then
                 on_complete()
@@ -159,12 +242,12 @@ function LotteryView.play_spin(role, target_index, on_complete)
         end)
     end
 
-    -- 第 k 步：把边框移到 index 卡。
+    -- 第 k 步：点亮 index 卡的框。
     local function step(k, index)
         if not is_valid() then
             return
         end
-        move_border(index)
+        show_frame_only(role, role_id, index)
 
         if k >= total then
             finish(index)

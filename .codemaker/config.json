@@ -1,4 +1,5 @@
 {
-    "codemaker_zip": "0.0.5", 
+    "codemaker_zip": "0.0.6", 
+    "is_se_mode": false, 
     "editor_cli": "0.2.6"
 }

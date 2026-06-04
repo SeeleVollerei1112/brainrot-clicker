@@ -8,7 +8,7 @@
 --                                       shop_name_i, shop_price_i, shop_desc_i,
 --                                       shop_coin_i, mall_buy_crit_i}
 --   时间页同理，子节点后缀为 _i_1，列表为 shop_tab_1_1。
--- 标签选中视觉：未选中 -> 标签底框透明 + 文字白；选中 -> 标签底框白 + 文字黑。
+-- 标签选中视觉：未选中 -> 标签按钮 opacity=0 + 文字白；选中 -> 标签按钮 opacity=1 + 文字黑。
 -- 商品文字不改字号/颜色，沿用编辑器原始样式。
 -- ============================================================
 
@@ -126,6 +126,11 @@ function MallView.initialize_role(role)
     for _, tcfg in ipairs(MallConfig.TABS) do
         local entry = tabs[tcfg.key]
         if entry then
+            -- 关闭标签文字(label)的触摸，让点击穿透 label 命中背后的标签按钮(btn)。
+            -- label 渲染不受影响，仍正常显示文字与选中底色。
+            if is_node(entry.label) then
+                role.set_node_touch_enabled(entry.label, false)
+            end
             for _, card in pairs(entry.cards) do
                 if is_node(card.buy) then
                     role.set_button_text(card.buy, ui.buy.text)
@@ -163,7 +168,7 @@ function MallView.render(role, display_data)
 end
 
 ---切换到某标签页：显示其 listview、隐藏其它页；
----选中标签按钮背景显示+文字黑，未选中按钮背景透明+文字白。
+---选中标签按钮不透明(opacity=1)+文字黑，未选中按钮透明(opacity=0)+文字白。
 ---@param role Role
 ---@param tab_key string
 function MallView.select_tab(role, tab_key)
@@ -175,13 +180,22 @@ function MallView.select_tab(role, tab_key)
         local entry = tabs[tcfg.key]
         if entry then
             local selected = tcfg.key == tab_key
+
+            -- 显隐对应页：set_node_visible 会一并移除隐藏页的触摸/滚动响应，
+            -- 避免隐藏页遮挡选中页的点击与列表滑动（透明度方案无法做到，故不用 opacity）。
             if is_node(entry.listview) then
                 role.set_node_visible(entry.listview, selected)
             end
+
             if is_node(entry.label) then
-                -- 选中底框：用标签文字背景显隐（按钮节点本身保持可点击）
-                role.set_label_background_color(entry.label, selected and ui.tab.box_shown or ui.tab.box_hidden, tf(0))
+                -- 文字变色：选中黑 / 未选中白（label 触摸已在 initialize_role 关闭，点击穿透到按钮）
                 role.set_label_color(entry.label, selected and ui.tab.text_selected or ui.tab.text_unselected, tf(0))
+            end
+
+            if is_node(entry.button) then
+                -- 选中底框：用按钮自身不透明度显隐（opacity=0 仍可点击，保证未选中页可被切回）
+                role.set_ui_opacity(entry.button,
+                    tf(selected and ui.tab.btn_opacity_selected or ui.tab.btn_opacity_unselected))
             end
         end
     end

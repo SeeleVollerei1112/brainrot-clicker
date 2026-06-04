@@ -3,6 +3,7 @@
 -- Orchestrates player sessions, engine triggers, systems and views.
 -- ============================================================
 
+local BoothController = require("Booth.BoothController")
 local CharacterView = require("UI.CharacterView")
 local ComboBar = require("UI.ComboBar")
 local ComboSystem = require("Systems.ComboSystem")
@@ -11,6 +12,7 @@ local FloatText = require("UI.FloatText")
 local GameConfig = require("Data.GameConfig")
 local GameState = require("Systems.GameState")
 local HeadsUpDisplay = require("UI.HeadsUpDisplay")
+local InventoryController = require("Inventory.InventoryController")
 local LotteryController = require("Lottery.LotteryController")
 local MallController = require("Mall.MallController")
 local ShopPanel = require("UI.ShopPanel")
@@ -103,6 +105,9 @@ local function initialize_session_views(session)
     ComboBar.initialize_role(role)
     ShopPanel.initialize_role(role)
     MallController.initialize_role(role)
+    InventoryController.initialize_role(role)
+    LotteryController.initialize_role(role)
+    BoothController.initialize_role(role)
 
     if launch_button then
         role.set_button_text(launch_button, UIConfig.APP.text.launch)
@@ -163,6 +168,8 @@ function GameController.remove_player_session(role)
     player_sessions[role_id] = nil
     FloatText.cleanup_role(role)
     CharacterView.cleanup_role(role)
+    LotteryController.cleanup_role(role)
+    BoothController.cleanup_role(role)
     LuaAPI.log("[GameController] 玩家会话已移除: " .. tostring(role_id), 0)
 end
 
@@ -311,6 +318,8 @@ function GameController.initialize()
     ComboBar.initialize(click_canvas)
     LotteryController.initialize(register_trigger)
     MallController.initialize(register_trigger)
+    InventoryController.initialize(register_trigger)
+    BoothController.initialize(register_trigger)
 
     bind_ui_interactions()
     register_timers()

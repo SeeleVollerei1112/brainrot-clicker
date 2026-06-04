@@ -57,7 +57,6 @@ local ShopConfig = {
             listview = "shop_listview",
             item_prefix = "shop_item_",
             card_prefix = "shop_card",
-            fill_prefix = "shop_fill",
             slot_prefix = "shop_slot",
             icon_prefix = "shop_icon",
             name_prefix = "shop_name",

@@ -11,14 +11,12 @@
 ---@class LotteryCard
 ---@field prize_id string  对应奖励 id（见 PRIZES）
 ---@field card string      卡片节点名（UINodes 键）
----@field center_pct number  边框停在该卡时，水平中心位置占画布宽度的百分比(0~100)
 
 ---@class LotteryConfig
 local LotteryConfig = {
     -- 转盘画布节点（均为 Data/UINodes.lua 中的键）
     CANVAS_NAME = "转盘画布",
     BUTTON_NAME = "抽奖",
-    BORDER_NAME = "选中卡片",
 
     TOUCH_CLICK = 1,
     TIP_DURATION = 2.0,
@@ -30,14 +28,15 @@ local LotteryConfig = {
         { id = "legendary", name = "传说奖励", weight = 5 },
     },
 
-    -- 三张卡片，按从左到右的视觉顺序排列，便于选中边框顺序循环。
-    -- center_pct 为边框水平中心占画布宽度的百分比(0~100)；经跑测截图校准：
-    -- 左 23 / 中 50 / 右 78，边框正好框住对应卡片。
+    -- 卡片按从左到右的视觉顺序排列，选中框依此顺序循环。
+    -- 每张卡在画布上须配一个选中框节点，命名约定为 "选中框_" .. card，
+    -- 例如 "蓝色卡片" → "选中框_蓝色卡片"。框由编辑器与卡片对齐摆放，
+    -- 运行时仅做显隐，新增卡片无需任何位置/百分比配置。
     ---@type LotteryCard[]
     CARDS = {
-        { prize_id = "common", card = "蓝色卡片", center_pct = 23.5 },
-        { prize_id = "legendary", card = "彩色卡片", center_pct = 50 },
-        { prize_id = "rare", card = "橙色卡片", center_pct = 77 },
+        { prize_id = "common", card = "蓝色卡片" },
+        { prize_id = "legendary", card = "彩色卡片" },
+        { prize_id = "rare", card = "橙色卡片" },
     },
 
     -- 转动节奏（单位：帧）。先加速后减速，最终平滑停在中奖卡。

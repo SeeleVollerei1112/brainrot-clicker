@@ -24,7 +24,7 @@ end
 
 ---@param role Role
 local function handle_spin(role)
-    if LotteryView.is_spinning() then
+    if LotteryView.is_spinning(role) then
         return
     end
 
@@ -109,6 +109,18 @@ function LotteryController.initialize(register_trigger)
             end
         end
     )
+end
+
+---为加入的玩家初始化转盘视图（隐藏选中框、重置该玩家转动状态）。
+---@param role Role
+function LotteryController.initialize_role(role)
+    LotteryView.initialize_role(role)
+end
+
+---玩家离开时清理其转盘视图状态。
+---@param role Role
+function LotteryController.cleanup_role(role)
+    LotteryView.cleanup_role(role)
 end
 
 return LotteryController
