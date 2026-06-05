@@ -1,23 +1,24 @@
--- ============================================================
--- Data/BoothConfig.lua
--- 展台玩法静态配置：展台区(zone) / 展台位(booth) / 物品类型(item)。
---
--- 三层结构：展台区 -> 展台位(0..booth_count-1) -> 放置的物品。
--- 物品类型带 base_attrs 作为「实例属性」的初值参考；放置后每个实例
--- 的属性可独立变化并随存档保存（见 Systems/BoothState.lua）。
---
--- 数值属性统一用整数，规避 Fix32 在 JSON 序列化中的小数串问题；
--- name 作为实例展示名保存，支持后续单实例改名或配置改名后的存档稳定展示。
--- 这里同时充当本阶段的测试数据来源（3 个区 + 5 个物品）。
---
--- 场景对接（运行时实测，2026-06-05）：
---   每个展台位在编辑器中各有一个独立的「事件触发区域」(CustomTriggerSpace,
---   prefab key = BOOTH_TRIGGER_KEY)，命名规则为
---       <展区名>_展示台_<序号>_触发区   （序号从 1 起）
---   例如「新手展区_展示台_1_触发区」。代码据此用 LuaAPI.query_unit(name)
---   反查触发区域并绑定进出事件，无需在区域上额外配置自定义值。
---   见 BoothConfig.booth_trigger_name / Booth/BoothInteraction.lua。
--- ============================================================
+--[[
+Booth/BoothConfig.lua
+
+展台玩法静态配置：展台区(zone) / 展台位(booth) / 物品类型(item)。
+
+三层结构：展台区 -> 展台位(0..booth_count-1) -> 放置的物品。
+物品类型带 base_attrs 作为「实例属性」的初值参考；放置后每个实例
+的属性可独立变化并随存档保存（见 Booth/BoothState.lua）。
+
+数值属性统一用整数，规避 Fix32 在 JSON 序列化中的小数串问题；
+name 作为实例展示名保存，支持后续单实例改名或配置改名后的存档稳定展示。
+这里同时充当本阶段的测试数据来源（3 个区 + 5 个物品）。
+
+场景对接（运行时实测，2026-06-05）：
+  每个展台位在编辑器中各有一个独立的「事件触发区域」(CustomTriggerSpace,
+  prefab key = BOOTH_TRIGGER_KEY)，命名规则为
+      <展区名>_展示台_<序号>_触发区   （序号从 1 起）
+  例如「新手展区_展示台_1_触发区」。代码据此用 LuaAPI.query_unit(name)
+  反查触发区域并绑定进出事件，无需在区域上额外配置自定义值。
+  见 BoothConfig.booth_trigger_name / Booth/BoothInteraction.lua。
+]]
 
 ---@class BoothZoneConfig
 ---@field id integer

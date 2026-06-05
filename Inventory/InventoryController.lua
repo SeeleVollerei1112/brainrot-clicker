@@ -24,7 +24,7 @@ function InventoryController.initialize_role(role)
     InventoryView.initialize_role(role)
 end
 
----绑定背包侧边栏所有交互。GAME_INIT 时由 GameController 调用。
+---绑定背包侧边栏所有交互。GAME_INIT 时由 GameApp 调用。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 function InventoryController.initialize(register_trigger)
     InventoryView.initialize()

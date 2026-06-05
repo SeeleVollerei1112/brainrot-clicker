@@ -13,12 +13,12 @@
 -- ============================================================
 
 local UINodes = require("Data.UINodes")
-local UIConfig = require("Data.UIConfig")
+local AppConfig = require("App.AppConfig")
 
 local InventoryView = {}
 
 local tf = math.tofixed
-local TOUCH_CLICK = UIConfig.TOUCH.CLICK
+local TOUCH_CLICK = AppConfig.TOUCH.CLICK
 
 -- 选中视觉常量（与商城标签 MallConfig.UI.tab 保持一致）
 local TEXT_SELECTED = 0xFF000000    -- 选中文字：黑

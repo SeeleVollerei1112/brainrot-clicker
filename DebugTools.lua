@@ -53,14 +53,14 @@ local function load_booth_modules()
 	end
 	BoothController = module
 
-	ok, module = pcall(require, "Systems.BoothState")
+	ok, module = pcall(require, "Booth.BoothState")
 	if not ok then
 		LuaAPI.log("[Debug] 加载 BoothState 失败: " .. tostring(module), 1)
 		return false
 	end
 	BoothState = module
 
-	ok, module = pcall(require, "Systems.BoothPersistence")
+	ok, module = pcall(require, "Booth.BoothPersistence")
 	if not ok then
 		LuaAPI.log("[Debug] 加载 BoothPersistence 失败: " .. tostring(module), 1)
 		return false

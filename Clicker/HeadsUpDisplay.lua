@@ -1,11 +1,12 @@
--- ============================================================
--- UI/HeadsUpDisplay.lua
--- Render-only HUD for brainrot and passive income.
--- ============================================================
+--[[
+Clicker/HeadsUpDisplay.lua
+
+HUD 表现层：只负责渲染脑腐值和每秒收益。
+]]
 
 local HeadsUpDisplay = {}
-local UIConfig = require("Data.UIConfig")
-local configuration = UIConfig.HUD
+local ClickerConfig = require("Clicker.ClickerConfig")
+local configuration = ClickerConfig.HUD
 local nodes = {}
 
 ---@param node any
@@ -32,7 +33,7 @@ local function fetch_child(parent, name)
     return node
 end
 
----Bind editor-authored HUD nodes once during game initialization.
+---游戏初始化时绑定编辑器内已搭好的 HUD 节点。
 ---@param canvas ECanvas
 function HeadsUpDisplay.initialize(canvas)
     nodes.coin = fetch_child(canvas, configuration.nodes.coin)
@@ -40,7 +41,7 @@ function HeadsUpDisplay.initialize(canvas)
     nodes.brainrot_per_second = fetch_child(canvas, configuration.nodes.brainrot_per_second)
 end
 
----Render one player's HUD values.
+---渲染单个玩家的 HUD 数值。
 ---@param role Role
 ---@param state PlayerGameState
 function HeadsUpDisplay.render(role, state)

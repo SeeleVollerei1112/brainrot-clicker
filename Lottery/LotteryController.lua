@@ -8,7 +8,7 @@ local LotteryConfig = require("Lottery.LotteryConfig")
 local LotterySystem = require("Lottery.LotterySystem")
 local LotteryView = require("Lottery.LotteryView")
 local UINodes = require("Data.UINodes")
-local UIConfig = require("Data.UIConfig")
+local AppConfig = require("App.AppConfig")
 
 local LotteryController = {}
 
@@ -51,13 +51,13 @@ end
 ---打开转盘画布（发送自定义消息，画布在编辑器中绑定了 show_event）。
 ---@param role Role
 local function handle_open(role)
-    role.send_ui_custom_event(UIConfig.APP.events.open_lottery, {})
+    role.send_ui_custom_event(AppConfig.APP.events.open_lottery, {})
 end
 
 ---关闭转盘画布（发送自定义消息，画布在编辑器中绑定了 hide_event）。
 ---@param role Role
 local function handle_close(role)
-    role.send_ui_custom_event(UIConfig.APP.events.close_lottery, {})
+    role.send_ui_custom_event(AppConfig.APP.events.close_lottery, {})
 end
 
 ---绑定转盘画布的开关导航与抽奖按钮。
@@ -66,10 +66,10 @@ function LotteryController.initialize(register_trigger)
     LotteryView.initialize()
 
     -- 世界画布的入口按钮：点击弹出转盘画布
-    local open_button = UINodes[UIConfig.APP.buttons.lottery_open]
+    local open_button = UINodes[AppConfig.APP.buttons.lottery_open]
     if open_button then
         register_trigger(
-            { EVENT.EUI_NODE_TOUCH_EVENT, open_button, UIConfig.TOUCH.CLICK },
+            { EVENT.EUI_NODE_TOUCH_EVENT, open_button, AppConfig.TOUCH.CLICK },
             function(event_name, actor, data)
                 if data and data.role then
                     handle_open(data.role)
@@ -77,14 +77,14 @@ function LotteryController.initialize(register_trigger)
             end
         )
     else
-        LuaAPI.log("[LotteryController] 缺少入口按钮节点: " .. UIConfig.APP.buttons.lottery_open, 1)
+        LuaAPI.log("[LotteryController] 缺少入口按钮节点: " .. AppConfig.APP.buttons.lottery_open, 1)
     end
 
     -- 转盘画布内的关闭按钮：点击退出转盘画布
-    local close_button = fetch_child(UINodes[LotteryConfig.CANVAS_NAME], UIConfig.APP.buttons.lottery_close)
+    local close_button = fetch_child(UINodes[LotteryConfig.CANVAS_NAME], AppConfig.APP.buttons.lottery_close)
     if close_button then
         register_trigger(
-            { EVENT.EUI_NODE_TOUCH_EVENT, close_button, UIConfig.TOUCH.CLICK },
+            { EVENT.EUI_NODE_TOUCH_EVENT, close_button, AppConfig.TOUCH.CLICK },
             function(event_name, actor, data)
                 if data and data.role then
                     handle_close(data.role)
@@ -92,7 +92,7 @@ function LotteryController.initialize(register_trigger)
             end
         )
     else
-        LuaAPI.log("[LotteryController] 缺少关闭按钮节点: " .. UIConfig.APP.buttons.lottery_close, 1)
+        LuaAPI.log("[LotteryController] 缺少关闭按钮节点: " .. AppConfig.APP.buttons.lottery_close, 1)
     end
 
     local spin_button = LotteryView.get_button()

@@ -1,10 +1,11 @@
--- ============================================================
--- Systems/ShopSystem.lua
--- Pure shop initialization, display-data projection and purchases.
--- ============================================================
+--[[
+UpgradeShop/UpgradeShopSystem.lua
 
-local GameState = require("Systems.GameState")
-local ShopConfig = require("Data.ShopConfig")
+升级商店业务层：初始化商品状态、生成展示数据、处理购买和数值成长。
+]]
+
+local PlayerState = require("Clicker.PlayerState")
+local UpgradeShopConfig = require("UpgradeShop.UpgradeShopConfig")
 
 ---@class ShopItemDisplayData
 ---@field id integer
@@ -27,7 +28,7 @@ local ShopConfig = require("Data.ShopConfig")
 ---@field success boolean
 ---@field reason string
 
-local ShopSystem = {}
+local UpgradeShopSystem = {}
 
 ---@param current_price number
 ---@param growth_percent number
@@ -49,10 +50,10 @@ local function get_item_state(state, item_id)
     return state.shop.items[item_id]
 end
 
----Initialize item prices for a newly created player state.
+---初始化新玩家状态里的商品价格和等级。
 ---@param state PlayerGameState
-function ShopSystem.initialize(state)
-    for _, item_configuration in ipairs(ShopConfig.ITEMS) do
+function UpgradeShopSystem.initialize(state)
+    for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local item_state = get_item_state(state, item_configuration.id)
         item_state.count = item_configuration.initial_level or 0
         item_state.level = item_configuration.initial_level or 0
@@ -60,12 +61,12 @@ function ShopSystem.initialize(state)
     end
 end
 
----Return whether lifetime brainrot has unlocked an item.
+---判断累计脑腐值是否已解锁商品。
 ---@param state PlayerGameState
 ---@param item_id integer
 ---@return boolean unlocked
-function ShopSystem.is_unlocked(state, item_id)
-    local item_configuration = ShopConfig.ITEMS[item_id]
+function UpgradeShopSystem.is_unlocked(state, item_id)
+    local item_configuration = UpgradeShopConfig.ITEMS[item_id]
     if not item_configuration then
         return false
     end
@@ -73,13 +74,13 @@ function ShopSystem.is_unlocked(state, item_id)
     return state.currency.total_brainrot >= item_configuration.unlock_total_brainrot
 end
 
----Return whether the player can buy an item now.
+---判断玩家当前是否可以买这个商品。
 ---@param state PlayerGameState
 ---@param item_id integer
 ---@return boolean can_buy
-function ShopSystem.can_buy(state, item_id)
-    local item_configuration = ShopConfig.ITEMS[item_id]
-    if not item_configuration or not ShopSystem.is_unlocked(state, item_id) then
+function UpgradeShopSystem.can_buy(state, item_id)
+    local item_configuration = UpgradeShopConfig.ITEMS[item_id]
+    if not item_configuration or not UpgradeShopSystem.is_unlocked(state, item_id) then
         return false
     end
 
@@ -95,13 +96,13 @@ end
 ---@param item_id integer
 ---@return ShopItemDisplayData|nil display_data
 local function get_item_display_data(state, item_id)
-    local item_configuration = ShopConfig.ITEMS[item_id]
+    local item_configuration = UpgradeShopConfig.ITEMS[item_id]
     if not item_configuration then
         return nil
     end
 
     local item_state = get_item_state(state, item_id)
-    local unlocked = ShopSystem.is_unlocked(state, item_id)
+    local unlocked = UpgradeShopSystem.is_unlocked(state, item_id)
     local icon_preset = item_configuration.locked_icon_preset
     if unlocked then
         icon_preset = item_configuration.icon_preset
@@ -116,18 +117,18 @@ local function get_item_display_data(state, item_id)
         count = item_state.count,
         icon_preset = icon_preset,
         unlocked = unlocked,
-        can_buy = ShopSystem.can_buy(state, item_id),
+        can_buy = UpgradeShopSystem.can_buy(state, item_id),
         max_level = item_configuration.max_level,
         unlock_total_brainrot = item_configuration.unlock_total_brainrot,
     }
 end
 
----Project all shop data needed by the view.
+---生成商店表现层需要的展示数据。
 ---@param state PlayerGameState
 ---@return ShopDisplayData display_data
-function ShopSystem.get_display_data(state)
+function UpgradeShopSystem.get_display_data(state)
     local item_display_data = {}
-    for _, item_configuration in ipairs(ShopConfig.ITEMS) do
+    for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         item_display_data[item_configuration.id] = get_item_display_data(state, item_configuration.id)
     end
 
@@ -137,16 +138,16 @@ function ShopSystem.get_display_data(state)
     }
 end
 
----Buy an item and apply its stat increase.
+---购买商品并应用对应数值成长。
 ---@param state PlayerGameState
 ---@param item_id integer
 ---@return ShopPurchaseResult result
-function ShopSystem.purchase(state, item_id)
-    local item_configuration = ShopConfig.ITEMS[item_id]
+function UpgradeShopSystem.purchase(state, item_id)
+    local item_configuration = UpgradeShopConfig.ITEMS[item_id]
     if not item_configuration then
         return { success = false, reason = "invalid_item" }
     end
-    if not ShopSystem.is_unlocked(state, item_id) then
+    if not UpgradeShopSystem.is_unlocked(state, item_id) then
         return { success = false, reason = "locked" }
     end
 
@@ -154,7 +155,7 @@ function ShopSystem.purchase(state, item_id)
     if item_configuration.max_level and item_state.level >= item_configuration.max_level then
         return { success = false, reason = "max_level" }
     end
-    if not GameState.spend_brainrot(state, item_state.current_price) then
+    if not PlayerState.spend_brainrot(state, item_state.current_price) then
         return { success = false, reason = "not_enough_brainrot" }
     end
 
@@ -170,10 +171,10 @@ function ShopSystem.purchase(state, item_id)
 
     item_state.current_price = get_next_price(
         item_state.current_price,
-        ShopConfig.get_price_growth(item_configuration)
+        UpgradeShopConfig.get_price_growth(item_configuration)
     )
 
     return { success = true, reason = "ok" }
 end
 
-return ShopSystem
+return UpgradeShopSystem

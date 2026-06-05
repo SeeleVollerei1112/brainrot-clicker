@@ -1,13 +1,14 @@
--- ============================================================
--- Systems/CurrencySystem.lua
--- Pure click and passive-income calculations.
--- ============================================================
+--[[
+Clicker/CurrencySystem.lua
+
+点击收益与被动收益计算。
+]]
 
 local CurrencySystem = {}
-local GameConfig = require("Data.GameConfig")
-local GameState = require("Systems.GameState")
+local ClickerConfig = require("Clicker.ClickerConfig")
+local PlayerState = require("Clicker.PlayerState")
 
----Add the income earned by one character click.
+---结算一次角色点击获得的收益。
 ---@param state PlayerGameState
 ---@return number income
 function CurrencySystem.add_click_income(state)
@@ -16,11 +17,11 @@ function CurrencySystem.add_click_income(state)
         income = 1
     end
 
-    GameState.add_brainrot(state, income)
+    PlayerState.add_brainrot(state, income)
     return income
 end
 
----Add one passive-income tick.
+---结算一次被动收益。
 ---@param state PlayerGameState
 ---@return number income
 function CurrencySystem.add_passive_income(state)
@@ -30,10 +31,10 @@ function CurrencySystem.add_passive_income(state)
     end
 
     if state.easter_egg.brainrot_per_second_bonus_active then
-        income = income * GameConfig.BRAINROT_PER_SECOND_EASTER_BONUS_MULTIPLIER
+        income = income * ClickerConfig.PASSIVE_INCOME.easter_bonus_multiplier
     end
 
-    GameState.add_brainrot(state, income)
+    PlayerState.add_brainrot(state, income)
     return income
 end
 

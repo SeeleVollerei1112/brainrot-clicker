@@ -1,31 +1,31 @@
--- ============================================================
--- Booth/BoothPlacement.lua
--- 展台「放置 / 回收」世界逻辑层：把背包里的物品放到展台位（在场景中创建
--- 物品到该展台触发区域的位置），或从展台位回收到背包。状态变更与存档统一
--- 走 BoothController（复用其 place_item / remove_item，二者自动存档）。
---
--- 红线（用户约定）：不使用 drop（丢弃）功能，放置一律用
---   GameAPI.create_equipment(prefab, pos) 把物品创建到指定区域；
---   回收用 character.create_equipment_to_slot(prefab, BACKPACK) 回到背包。
---
--- 运行时句柄（world_equipment）只在内存维护、不入档：会话开始时按存档里的
--- placements 重新 spawn（spawn_saved）。展台位的世界坐标按触发区域名反查
--- （LuaAPI.query_unit）并缓存。
--- ============================================================
+--[[
+Booth/BoothPlacement.lua
 
-local BoothConfig = require("Data.BoothConfig")
+展台「放置 / 回收」世界逻辑层：把背包里的物品放到展台位（在场景中创建
+物品到该展台触发区域的位置），或从展台位回收到背包。状态变更与存档统一
+走 BoothController（复用其 place_item / remove_item，二者自动存档）。
+
+红线（用户约定）：不使用 drop（丢弃）功能，放置一律用
+  GameAPI.create_equipment(prefab, pos) 把物品创建到指定区域；
+  回收用 character.create_equipment_to_slot(prefab, BACKPACK) 回到背包。
+
+运行时句柄（world_equipment）只在内存维护、不入档：会话开始时按存档里的
+placements 重新 spawn（spawn_saved）。展台位的世界坐标按触发区域名反查
+（LuaAPI.query_unit）并缓存。
+]]
+
+local BoothConfig = require("Booth.BoothConfig")
 local BoothController = require("Booth.BoothController")
 
 local BoothPlacement = {}
 
 local BACKPACK = Enums.EquipmentSlotType.BACKPACK
-local EQUIPPED = Enums.EquipmentSlotType.EQUIPPED
 
--- world_equipment[role_id]["zone|booth"] = Equipment（已放置到场景中的物品句柄）
+-- 已放置的世界物品句柄：world_equipment[role_id]["zone|booth"] = Equipment
 ---@type table<RoleID, table<string, Equipment>>
 local world_equipment = {}
 
--- 展台位世界坐标缓存（按触发区域名反查一次后缓存）：booth_pos["zone|booth"] = Vector3
+-- 展台位世界坐标缓存：booth_pos["zone|booth"] = Vector3
 local booth_pos = {}
 
 ---@param role Role
@@ -89,11 +89,11 @@ local function get_world_equipment(role_id, zone_id, booth_index)
     return by_slot and by_slot[slot_key(zone_id, booth_index)] or nil
 end
 
----安全销毁一个世界物品句柄。
+---销毁一个世界物品句柄。
 ---@param equipment Equipment|nil
-local function destroy_equipment_safe(equipment)
+local function destroy_equipment(equipment)
     if equipment then
-        pcall(function() equipment.destroy_equipment() end)
+        equipment.destroy_equipment()
     end
 end
 
@@ -101,8 +101,7 @@ end
 ---@param character Character
 ---@return Equipment|nil equipment, BoothItemConfig|nil item
 local function pick_backpack_item(character)
-    local selected = nil
-    pcall(function() selected = character.get_selected_equipment() end)
+    local selected = character.get_selected_equipment()
     if selected then
         local item = BoothConfig.find_item_by_prefab(selected.get_key())
         if item then
@@ -110,8 +109,7 @@ local function pick_backpack_item(character)
         end
     end
 
-    local list = nil
-    pcall(function() list = character.get_equipment_list_by_slot_type(BACKPACK) end)
+    local list = character.get_equipment_list_by_slot_type(BACKPACK)
     if type(list) == "table" then
         for _, equipment in ipairs(list) do
             local item = BoothConfig.find_item_by_prefab(equipment.get_key())
@@ -182,12 +180,11 @@ function BoothPlacement.place(role, zone_id, booth_index)
     end
 
     -- 2) 在展台位创建世界物品（不使用 drop）。
-    local world = nil
-    pcall(function() world = GameAPI.create_equipment(item.prefab_id, pos) end)
+    local world = GameAPI.create_equipment(item.prefab_id, pos)
     set_world_equipment(role_id, zone_id, booth_index, world)
 
     -- 3) 背包里那件物品移除（创建到场景 = 从背包取出）。
-    destroy_equipment_safe(equipment)
+    destroy_equipment(equipment)
 
     LuaAPI.log("[BoothPlacement] 放置成功 z=" .. zone_id .. " b=" .. booth_index
         .. " item=" .. item.id, 0)
@@ -213,16 +210,16 @@ function BoothPlacement.recycle(role, zone_id, booth_index)
     local item = BoothConfig.find_item(placement.item_id)
     local prefab_id = item and item.prefab_id
 
-    -- 1) 回到装配区（创建到装配槽位）。
+    -- 1) 回到背包。
     if prefab_id then
-        pcall(function() character.create_equipment_to_slot(prefab_id, EQUIPPED) end)
+        character.create_equipment_to_slot(prefab_id, BACKPACK)
     else
         LuaAPI.log("[BoothPlacement] 回收物品缺少 prefab_id, 仅清状态 item="
             .. tostring(placement.item_id), 1)
     end
 
     -- 2) 销毁展台位上的世界物品。
-    destroy_equipment_safe(get_world_equipment(role_id, zone_id, booth_index))
+    destroy_equipment(get_world_equipment(role_id, zone_id, booth_index))
     set_world_equipment(role_id, zone_id, booth_index, nil)
 
     -- 3) 清状态 + 存档。
@@ -252,8 +249,7 @@ function BoothPlacement.spawn_saved(role)
             local prefab_id = item and item.prefab_id
             local pos = prefab_id and resolve_booth_position(zone_id, booth_index)
             if prefab_id and pos then
-                local world = nil
-                pcall(function() world = GameAPI.create_equipment(prefab_id, pos) end)
+                local world = GameAPI.create_equipment(prefab_id, pos)
                 set_world_equipment(role_id, zone_id, booth_index, world)
             end
         end
@@ -270,7 +266,7 @@ function BoothPlacement.clear_role(role)
     local by_slot = world_equipment[role_id]
     if by_slot then
         for _, equipment in pairs(by_slot) do
-            destroy_equipment_safe(equipment)
+            destroy_equipment(equipment)
         end
     end
     world_equipment[role_id] = nil

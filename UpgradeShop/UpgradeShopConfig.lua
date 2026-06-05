@@ -1,7 +1,8 @@
--- ============================================================
--- Data/ShopConfig.lua
--- 商城道具配置：道具名、描述、兑换额度、等级与收益效果
--- ============================================================
+--[[
+UpgradeShop/UpgradeShopConfig.lua
+
+点击升级商店配置：道具名、描述、兑换额度、等级与收益效果。
+]]
 
 ---@class ShopItemConfig
 ---@field id integer
@@ -19,8 +20,8 @@
 ---@field icon_preset integer|nil
 ---@field locked_icon_preset integer|nil
 
----@class ShopConfig
-local ShopConfig = {
+---@class UpgradeShopConfig
+local UpgradeShopConfig = {
     PRICE_GROWTH_PERCENT = 115,
 
     UI = {
@@ -199,8 +200,8 @@ local ShopConfig = {
     },
 }
 
-function ShopConfig.get_price_growth(item)
-    return item.price_growth_percent or ShopConfig.PRICE_GROWTH_PERCENT
+function UpgradeShopConfig.get_price_growth(item)
+    return item.price_growth_percent or UpgradeShopConfig.PRICE_GROWTH_PERCENT
 end
 
-return ShopConfig
+return UpgradeShopConfig

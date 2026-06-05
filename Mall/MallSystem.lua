@@ -5,7 +5,7 @@
 -- 真实下单与道具发放通过 set_grant_handler() 注册的钩子接入（预留接口）。
 -- ============================================================
 
-local MallConfig = require("Data.MallConfig")
+local MallConfig = require("Mall.MallConfig")
 
 ---@class MallItemDisplayData
 ---@field id integer

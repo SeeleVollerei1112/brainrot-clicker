@@ -4,11 +4,11 @@
 -- 通过自定义消息开关商城画布（画布已在编辑器绑定 show/hide_event）。
 -- ============================================================
 
-local MallConfig = require("Data.MallConfig")
+local MallConfig = require("Mall.MallConfig")
 local MallSystem = require("Mall.MallSystem")
 local MallView = require("Mall.MallView")
 local UINodes = require("Data.UINodes")
-local UIConfig = require("Data.UIConfig")
+local AppConfig = require("App.AppConfig")
 
 local MallController = {}
 
@@ -27,7 +27,7 @@ end
 ---打开商城画布并渲染默认标签页。
 ---@param role Role
 local function handle_open(role)
-    role.send_ui_custom_event(UIConfig.APP.events.open_mall, {})
+    role.send_ui_custom_event(AppConfig.APP.events.open_mall, {})
     MallView.initialize_role(role)
     MallView.render(role, MallSystem.get_display_data())
     MallView.select_tab(role, MallView.get_default_tab_key())
@@ -36,7 +36,7 @@ end
 ---关闭商城画布。
 ---@param role Role
 local function handle_close(role)
-    role.send_ui_custom_event(UIConfig.APP.events.close_mall, {})
+    role.send_ui_custom_event(AppConfig.APP.events.close_mall, {})
 end
 
 ---切换侧边栏标签页。
@@ -67,41 +67,41 @@ function MallController.initialize_role(role)
     if not role then
         return
     end
-    role.send_ui_custom_event(UIConfig.APP.events.close_mall, {})
+    role.send_ui_custom_event(AppConfig.APP.events.close_mall, {})
     MallView.initialize_role(role)
 end
 
----绑定商城所有交互。GAME_INIT 时由 GameController 调用。
+---绑定商城所有交互。GAME_INIT 时由 GameApp 调用。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 function MallController.initialize(register_trigger)
     MallView.initialize()
 
     -- 入口按钮（世界画布的 btn_shop）：打开商城
-    local open_button = UINodes[UIConfig.APP.buttons.mall_open]
+    local open_button = UINodes[AppConfig.APP.buttons.mall_open]
     bind_button(
         open_button,
-        { EVENT.EUI_NODE_TOUCH_EVENT, open_button, UIConfig.TOUCH.CLICK },
+        { EVENT.EUI_NODE_TOUCH_EVENT, open_button, AppConfig.TOUCH.CLICK },
         function(event_name, actor, data)
             if data and data.role then
                 handle_open(data.role)
             end
         end,
         register_trigger,
-        "[MallController] 缺少入口按钮节点: " .. tostring(UIConfig.APP.buttons.mall_open)
+        "[MallController] 缺少入口按钮节点: " .. tostring(AppConfig.APP.buttons.mall_open)
     )
 
     -- 商城画布内的关闭按钮
-    local close_button = UINodes[UIConfig.APP.buttons.mall_close]
+    local close_button = UINodes[AppConfig.APP.buttons.mall_close]
     bind_button(
         close_button,
-        { EVENT.EUI_NODE_TOUCH_EVENT, close_button, UIConfig.TOUCH.CLICK },
+        { EVENT.EUI_NODE_TOUCH_EVENT, close_button, AppConfig.TOUCH.CLICK },
         function(event_name, actor, data)
             if data and data.role then
                 handle_close(data.role)
             end
         end,
         register_trigger,
-        "[MallController] 缺少关闭按钮节点: " .. tostring(UIConfig.APP.buttons.mall_close)
+        "[MallController] 缺少关闭按钮节点: " .. tostring(AppConfig.APP.buttons.mall_close)
     )
 
     -- 侧边栏标签按钮 + 各商品购买按钮

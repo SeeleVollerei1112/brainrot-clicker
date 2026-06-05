@@ -1,33 +1,34 @@
--- ============================================================
--- Booth/BoothInteraction.lua
--- 展台交互层：玩家进出每个展台位的「事件触发区域」时，按当前状态显隐
--- 「放置 / 回收」按钮；点击按钮则对玩家所在展台位执行放置/回收。
---
--- 触发区域按命名(BoothConfig.booth_trigger_name)用 LuaAPI.query_unit 反查，
--- 逐个注册 ANY_LIFEENTITY_TRIGGER_SPACE 的 ENTER / LEAVE，建立
--- trigger_zone_id -> (zone_id, booth_index) 注册表。
---
--- 「放置/回收」按钮节点由编辑器导出到 Data/UINodes.lua（名字见 BoothConfig.UI）；
--- 若尚未导出，运行时安全跳过显隐并打日志。按钮显隐用 set_node_visible（与背包/
--- 商城一致：同时摘除隐藏页触摸响应）。
--- ============================================================
-local BoothConfig = require("Data.BoothConfig")
+--[[
+Booth/BoothInteraction.lua
+
+展台交互层：玩家进出每个展台位的「事件触发区域」时，按当前状态显隐
+「放置 / 回收」按钮；点击按钮则对玩家所在展台位执行放置/回收。
+
+触发区域按命名(BoothConfig.booth_trigger_name)用 LuaAPI.query_unit 反查，
+逐个注册 ANY_LIFEENTITY_TRIGGER_SPACE 的 ENTER / LEAVE，建立
+trigger_zone_id -> (zone_id, booth_index) 注册表。
+
+「放置/回收」按钮节点由编辑器导出到 Data/UINodes.lua（名字见 BoothConfig.UI）；
+若尚未导出，运行时安全跳过显隐并打日志。按钮显隐用 set_node_visible（与背包/
+商城一致：同时摘除隐藏页触摸响应）。
+]]
+local BoothConfig = require("Booth.BoothConfig")
 local BoothPlacement = require("Booth.BoothPlacement")
 local BoothZoneView = require("Booth.BoothZoneView")
 local UINodes = require("Data.UINodes")
-local UIConfig = require("Data.UIConfig")
+local AppConfig = require("App.AppConfig")
 
 local BoothInteraction = {}
 
-local TOUCH_CLICK = UIConfig.TOUCH.CLICK
+local TOUCH_CLICK = AppConfig.TOUCH.CLICK
 local ENTER = Enums.TriggerSpaceEventType.ENTER
 local LEAVE = Enums.TriggerSpaceEventType.LEAVE
 
--- trigger_zone_id -> { zone_id, booth_index }
+-- 触发区域 ID -> { 展区 ID, 展台位索引 }
 ---@type table<CustomTriggerSpaceID, { zone_id: integer, booth_index: integer }>
 local booth_by_zone_id = {}
 
--- current_booth[role_id] = { zone_id, booth_index }（玩家当前所在展台位）
+-- 当前展台位：current_booth[role_id] = { zone_id, booth_index }
 ---@type table<RoleID, { zone_id: integer, booth_index: integer }>
 local current_booth = {}
 
@@ -51,12 +52,7 @@ end
 ---@param life_entity any
 ---@return Role|nil
 local function entity_to_role(life_entity)
-    if not life_entity then
-        return nil
-    end
-    local role = nil
-    pcall(function() role = life_entity.get_ctrl_role() end)
-    return role
+    return life_entity.get_ctrl_role()
 end
 
 ---按某展台位的占用/背包情况，显隐放置/回收按钮。
@@ -199,7 +195,7 @@ local function bind_buttons(register_trigger)
     end
 end
 
----GAME_INIT 时由 GameController 调用：解析按钮节点 + 绑定触发区域与按钮。
+---GAME_INIT 时由 GameApp 调用：解析按钮节点 + 绑定触发区域与按钮。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 function BoothInteraction.initialize(register_trigger)
     booth_by_zone_id = {}

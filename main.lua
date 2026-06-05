@@ -3,19 +3,19 @@
 -- Brainrot Clicker lifecycle entrypoint.
 -- ============================================================
 
-local GameController = require("Controllers.GameController")
+local GameApp = require("App.GameApp")
 
 
 LuaAPI.global_register_trigger_event(
     { EVENT.GAME_INIT },
     function()
-        GameController.initialize()
+        GameApp.initialize()
     end
 )
 
 LuaAPI.global_register_trigger_event(
     { EVENT.GAME_END },
     function()
-        GameController.shutdown()
+        GameApp.shutdown()
     end
 )

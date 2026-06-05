@@ -12,15 +12,15 @@
 -- 商品文字不改字号/颜色，沿用编辑器原始样式。
 -- ============================================================
 
-local MallConfig = require("Data.MallConfig")
-local UIConfig = require("Data.UIConfig")
+local MallConfig = require("Mall.MallConfig")
+local AppConfig = require("App.AppConfig")
 local UINodes = require("Data.UINodes")
 
 local MallView = {}
 
 local tf = math.tofixed
 local ui = MallConfig.UI
-local TOUCH_CLICK = UIConfig.TOUCH.CLICK
+local TOUCH_CLICK = AppConfig.TOUCH.CLICK
 
 local sidebar = nil
 ---@type table<string, { config:MallTabConfig, listview:ENode, button:ENode, label:ENode, cards:table }>

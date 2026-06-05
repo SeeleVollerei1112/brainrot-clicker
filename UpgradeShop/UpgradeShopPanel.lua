@@ -1,12 +1,14 @@
--- ============================================================
--- UI/ShopPanel.lua
--- Static-node shop view. Business decisions arrive as display data.
--- ============================================================
+--[[
+UpgradeShop/UpgradeShopPanel.lua
 
-local ShopPanel = {}
-local ShopConfig = require("Data.ShopConfig")
-local UIConfig = require("Data.UIConfig")
-local configuration = ShopConfig.UI
+升级商店表现层。
+静态节点由编辑器搭好，业务层只传入展示数据，本文件负责绑定节点、渲染文本与触摸状态。
+]]
+
+local UpgradeShopPanel = {}
+local UpgradeShopConfig = require("UpgradeShop.UpgradeShopConfig")
+local AppConfig = require("App.AppConfig")
+local configuration = UpgradeShopConfig.UI
 local node_names = configuration.nodes
 local colors = configuration.colors
 local label_configuration = configuration.label
@@ -37,7 +39,7 @@ end
 local function fetch_child(parent, name, required)
     if not is_node(parent) then
         if required then
-            LuaAPI.log("[ShopPanel] 缺少父节点，无法获取: " .. name, 1)
+            LuaAPI.log("[UpgradeShopPanel] 缺少父节点，无法获取: " .. name, 1)
         end
         return nil
     end
@@ -45,7 +47,7 @@ local function fetch_child(parent, name, required)
     local node = GameAPI.get_eui_child_by_name(parent, name)
     if not is_node(node) then
         if required then
-            LuaAPI.log("[ShopPanel] 缺少静态节点: " .. name, 1)
+            LuaAPI.log("[UpgradeShopPanel] 缺少静态节点: " .. name, 1)
         end
         return nil
     end
@@ -174,14 +176,14 @@ end
 
 ---@param role Role
 local function hide_unused_slots(role)
-    for slot_index = #ShopConfig.ITEMS + 1, #static_slots do
+    for slot_index = #UpgradeShopConfig.ITEMS + 1, #static_slots do
         set_slot_visible(role, static_slots[slot_index], false)
     end
 end
 
----Bind editor-authored shop nodes once.
+---绑定编辑器内已搭好的商店节点。
 ---@param canvas ECanvas
-function ShopPanel.initialize(canvas)
+function UpgradeShopPanel.initialize(canvas)
     panel = fetch_child(canvas, node_names.panel, true)
     listview = nil
     cards_by_item_id = {}
@@ -190,7 +192,7 @@ function ShopPanel.initialize(canvas)
     click_power_label = nil
 
     if not is_node(panel) then
-        LuaAPI.log("[ShopPanel] 静态商城根节点不存在，跳过商城绑定", 1)
+        LuaAPI.log("[UpgradeShopPanel] 静态商城根节点不存在，跳过商城绑定", 1)
         return
     end
 
@@ -198,7 +200,7 @@ function ShopPanel.initialize(canvas)
     click_power_label = fetch_child(panel, node_names.number, true)
     listview = fetch_child(panel, node_names.listview, true)
     if not is_node(listview) then
-        LuaAPI.log("[ShopPanel] 静态商城列表节点不存在，跳过商城绑定", 1)
+        LuaAPI.log("[UpgradeShopPanel] 静态商城列表节点不存在，跳过商城绑定", 1)
         return
     end
 
@@ -210,26 +212,26 @@ function ShopPanel.initialize(canvas)
         static_slots[slot_index] = card
     end
 
-    for slot_index, item_configuration in ipairs(ShopConfig.ITEMS) do
+    for slot_index, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local card = static_slots[slot_index]
         if card then
             card.item_id = item_configuration.id
             cards_by_item_id[item_configuration.id] = card
         else
-            LuaAPI.log("[ShopPanel] 商品缺少静态槽位: index=" .. tostring(slot_index), 1)
+            LuaAPI.log("[UpgradeShopPanel] 商品缺少静态槽位: index=" .. tostring(slot_index), 1)
         end
     end
 
     LuaAPI.log(
-        "[ShopPanel] static slots bound items=" .. tostring(#ShopConfig.ITEMS)
+        "[UpgradeShopPanel] static slots bound items=" .. tostring(#UpgradeShopConfig.ITEMS)
             .. " slots=" .. tostring(#static_slots),
         0
     )
 end
 
----Initialize styles and touch behavior for one role.
+---初始化单个玩家看到的商店样式和触摸状态。
 ---@param role Role
-function ShopPanel.initialize_role(role)
+function UpgradeShopPanel.initialize_role(role)
     if not role then
         return
     end
@@ -239,7 +241,7 @@ function ShopPanel.initialize_role(role)
     set_title_style(role, click_power_label)
     hide_unused_slots(role)
 
-    for _, item_configuration in ipairs(ShopConfig.ITEMS) do
+    for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local card = cards_by_item_id[item_configuration.id]
         if card then
             set_slot_visible(role, card, true)
@@ -252,16 +254,16 @@ function ShopPanel.initialize_role(role)
     end
 end
 
----Bind purchase interactions through the controller-owned registrar.
+---通过主控制器传入的注册函数绑定购买事件。
 ---@param on_purchase fun(role: Role, item_id: integer)
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
-function ShopPanel.bind_purchase_handler(on_purchase, register_trigger)
-    for _, item_configuration in ipairs(ShopConfig.ITEMS) do
+function UpgradeShopPanel.bind_purchase_handler(on_purchase, register_trigger)
+    for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local item_id = item_configuration.id
         local card = cards_by_item_id[item_id]
         if card then
             register_trigger(
-                { EVENT.EUI_NODE_TOUCH_EVENT, card.container, UIConfig.TOUCH.CLICK },
+                { EVENT.EUI_NODE_TOUCH_EVENT, card.container, AppConfig.TOUCH.CLICK },
                 function(event_name, actor, data)
                     local role = data and data.role
                     if role then
@@ -273,10 +275,10 @@ function ShopPanel.bind_purchase_handler(on_purchase, register_trigger)
     end
 end
 
----Set the entire shop panel visible or hidden for one role.
+---设置单个玩家的商店面板显隐。
 ---@param role Role
 ---@param visible boolean
-function ShopPanel.set_visible(role, visible)
+function UpgradeShopPanel.set_visible(role, visible)
     if not role then
         return
     end
@@ -288,7 +290,7 @@ function ShopPanel.set_visible(role, visible)
     if is_node(click_power_label) then role.set_node_visible(click_power_label, visible) end
 
     for slot_index, card in ipairs(static_slots) do
-        local slot_visible = visible and slot_index <= #ShopConfig.ITEMS
+        local slot_visible = visible and slot_index <= #UpgradeShopConfig.ITEMS
         set_slot_visible(role, card, slot_visible)
         if card.slot and card.icon then
             role.set_ui_opacity(card.slot, to_fixed(slot_visible and opacity_configuration.visible or opacity_configuration.hidden))
@@ -299,10 +301,10 @@ function ShopPanel.set_visible(role, visible)
     end
 end
 
----Render shop display data projected by ShopSystem.
+---渲染 UpgradeShopSystem 生成的商店展示数据。
 ---@param role Role
 ---@param display_data ShopDisplayData
-function ShopPanel.render(role, display_data)
+function UpgradeShopPanel.render(role, display_data)
     if not role or not display_data then
         return
     end
@@ -313,7 +315,7 @@ function ShopPanel.render(role, display_data)
         role.set_label_text(click_power_label, configuration.title_prefix .. format_integer(display_data.click_power))
     end
 
-    for _, item_configuration in ipairs(ShopConfig.ITEMS) do
+    for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local card = cards_by_item_id[item_configuration.id]
         local item_display_data = display_data.items[item_configuration.id]
         if card and item_display_data then
@@ -321,7 +323,7 @@ function ShopPanel.render(role, display_data)
             role.set_label_text(card.description, item_display_data.description)
             role.set_label_text(card.level, tostring(item_display_data.level))
 
-            -- nil means the editor-authored texture should remain unchanged.
+            -- 图标预设 icon_preset 为 nil 时沿用编辑器内的原贴图。
             if item_display_data.icon_preset then
                 role.set_image_texture_by_key_with_auto_resize(card.icon, item_display_data.icon_preset, false)
             end
@@ -360,4 +362,4 @@ function ShopPanel.render(role, display_data)
     end
 end
 
-return ShopPanel
+return UpgradeShopPanel

@@ -1,17 +1,18 @@
--- ============================================================
--- UI/CharacterView.lua
--- Bind the click target, play character-only visual feedback, and
--- drive the per-role skin (image + background effect + burst color).
---
--- Skins are config groups in UIConfig.CHARACTER.skins, unlocked by
--- lifetime brainrot. Image and burst color are per-role render calls;
--- effects use shared nodes shown/played per role to stay isolated.
--- ============================================================
+--[[
+Clicker/CharacterView.lua
+
+角色点击表现层。
+负责绑定点击目标、播放角色点击反馈，并按玩家累计脑腐值切换皮肤。
+
+皮肤配置在 ClickerConfig.CHARACTER.skins 中。人物图片和 burst 颜色走玩家维度
+渲染调用；特效节点是共享 UI 节点，但每个玩家单独显隐和播放，避免互相串状态。
+]]
 
 local CharacterView = {}
-local UIConfig = require("Data.UIConfig")
-local SkinSystem = require("Systems.SkinSystem")
-local configuration = UIConfig.CHARACTER
+local AppConfig = require("App.AppConfig")
+local ClickerConfig = require("Clicker.ClickerConfig")
+local SkinSystem = require("Clicker.SkinSystem")
+local configuration = ClickerConfig.CHARACTER
 local nodes = {}
 local effect_nodes = {}
 local squeeze_generations_by_role_id = {}
@@ -26,7 +27,7 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
----Force a color (AARRGGBB) to full opacity, keeping its RGB.
+---把 AARRGGBB 颜色强制转成不透明，保留 RGB。
 ---@param color integer
 ---@return integer opaque_color
 local function to_opaque(color)
@@ -78,7 +79,7 @@ local function play_squeeze(role)
     end)
 end
 
----Bind the editor-authored character nodes and create skin effect nodes once.
+---绑定编辑器内的角色节点，并一次性创建皮肤特效节点。
 ---@param canvas ECanvas
 function CharacterView.initialize(canvas)
     lifecycle_generation = lifecycle_generation + 1
@@ -114,7 +115,7 @@ function CharacterView.initialize(canvas)
     end
 end
 
----Initialize role-local visual state (effects hidden until a skin is applied).
+---初始化玩家自己的表现状态，皮肤应用前先隐藏特效。
 ---@param role Role
 function CharacterView.initialize_role(role)
     if not role then
@@ -127,13 +128,13 @@ function CharacterView.initialize_role(role)
         role.stop_ui_effect(effect_node)
         role.set_node_visible(effect_node, false)
     end
-    -- Default to the editor ring; update_skin reconciles to the active skin.
+    -- 默认播放编辑器内的圆环；update_skin 会再切到当前皮肤效果。
     if nodes.animation_ring then
         role.play_ui_effect(nodes.animation_ring)
     end
 end
 
----Resolve and apply the highest unlocked skin for a role, if it changed.
+---解析并应用玩家当前已解锁的最高皮肤。
 ---@param role Role
 ---@param total_brainrot number
 ---@return boolean changed
@@ -159,7 +160,7 @@ function CharacterView.update_skin(role, total_brainrot)
     if nodes.character_image and skin.image then
         role.set_image_texture_by_key_with_auto_resize(nodes.character_image, skin.image, configuration.reset_image_size)
     end
-    -- image_small 留空时沿用 image；两者都为 nil 时保持编辑器原贴图，不调用 API。
+    -- 小图 image_small 留空时沿用 image；两者都为 nil 时保持编辑器原贴图，不调用 API。
     local small_image = skin.image_small or skin.image
     if nodes.character_image_small and small_image then
         role.set_image_texture_by_key_with_auto_resize(
@@ -179,8 +180,10 @@ function CharacterView.update_skin(role, total_brainrot)
         end
     end
 
-    -- The editor-authored ring is the fallback effect for tiers without an
-    -- effect_style; a configured effect replaces it.
+    --[[
+    编辑器内圆环是没有 effect_style 时的兜底效果；
+    配了皮肤特效时，由皮肤特效替代它。
+    ]]
     if nodes.animation_ring then
         if effect_nodes[tier_index] then
             role.stop_ui_effect(nodes.animation_ring)
@@ -195,7 +198,7 @@ function CharacterView.update_skin(role, total_brainrot)
     return true
 end
 
----Opaque float-text color coordinated with the role's active burst rest color.
+---取飘字颜色，跟当前皮肤的 burst 常态颜色保持一致。
 ---@param role Role
 ---@return integer color
 function CharacterView.get_active_float_color(role)
@@ -204,7 +207,7 @@ function CharacterView.get_active_float_color(role)
     return to_opaque(burst.rest_color)
 end
 
----Bind click interaction through the controller-owned registrar.
+---通过主控制器传入的注册函数绑定点击事件。
 ---@param on_click fun(role: Role)
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 function CharacterView.bind_click_handler(on_click, register_trigger)
@@ -213,7 +216,7 @@ function CharacterView.bind_click_handler(on_click, register_trigger)
     end
 
     register_trigger(
-        { EVENT.EUI_NODE_TOUCH_EVENT, nodes.click_button, UIConfig.TOUCH.CLICK },
+        { EVENT.EUI_NODE_TOUCH_EVENT, nodes.click_button, AppConfig.TOUCH.CLICK },
         function(event_name, actor, data)
             local role = data and data.role
             if role then
@@ -223,14 +226,14 @@ function CharacterView.bind_click_handler(on_click, register_trigger)
     )
 end
 
----Play feedback for a successful click.
+---播放一次成功点击反馈。
 ---@param role Role
 function CharacterView.play_click_feedback(role)
     play_burst(role)
     play_squeeze(role)
 end
 
----Drop one role's skin state when they leave the game.
+---玩家离开时清理对应的皮肤状态。
 ---@param role Role
 function CharacterView.cleanup_role(role)
     local role_id = get_role_id(role)
@@ -242,7 +245,7 @@ function CharacterView.cleanup_role(role)
     active_burst_by_role_id[role_id] = nil
 end
 
----Invalidate delayed callbacks during game shutdown.
+---关闭玩法时让延迟回调失效。
 function CharacterView.shutdown()
     lifecycle_generation = lifecycle_generation + 1
     squeeze_generations_by_role_id = {}

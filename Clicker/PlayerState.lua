@@ -1,9 +1,10 @@
--- ============================================================
--- Systems/GameState.lua
--- Per-player business state and atomic currency operations.
--- ============================================================
+--[[
+Clicker/PlayerState.lua
 
-local GameConfig = require("Data.GameConfig")
+单个玩家的点击玩法状态树，以及最基础的脑腐值增减操作。
+]]
+
+local ClickerConfig = require("Clicker.ClickerConfig")
 
 ---@class CurrencyState
 ---@field brainrot number
@@ -35,26 +36,27 @@ local GameConfig = require("Data.GameConfig")
 ---@field combo ComboState
 ---@field easter_egg EasterEggState
 
-local GameState = {}
+local PlayerState = {}
 
----Create a new independent state tree for one player.
+---创建单个玩家独立的状态树。
 ---@return PlayerGameState state
-function GameState.new()
+function PlayerState.new()
+    local initial = ClickerConfig.INITIAL
     return {
         currency = {
-            brainrot = GameConfig.INITIAL_BRAINROT,
-            total_brainrot = GameConfig.INITIAL_BRAINROT,
-            click_power = GameConfig.INITIAL_CLICK_POWER,
-            brainrot_per_second = GameConfig.INITIAL_BRAINROT_PER_SECOND,
+            brainrot = initial.brainrot,
+            total_brainrot = initial.brainrot,
+            click_power = initial.click_power,
+            brainrot_per_second = initial.brainrot_per_second,
         },
         shop = {
             items = {},
         },
         combo = {
-            count = GameConfig.INITIAL_COMBO_COUNT,
-            multiplier = GameConfig.INITIAL_COMBO_MULTIPLIER,
-            tick_counter = GameConfig.INITIAL_TICK_COUNTER,
-            last_click_tick = GameConfig.INITIAL_TICK_COUNTER,
+            count = initial.combo_count,
+            multiplier = initial.combo_multiplier,
+            tick_counter = initial.tick_counter,
+            last_click_tick = initial.tick_counter,
         },
         easter_egg = {
             active = false,
@@ -63,19 +65,19 @@ function GameState.new()
     }
 end
 
----Add spendable and lifetime brainrot together.
+---同时增加当前可消费脑腐值和累计脑腐值。
 ---@param state PlayerGameState
 ---@param amount number
-function GameState.add_brainrot(state, amount)
+function PlayerState.add_brainrot(state, amount)
     state.currency.brainrot = state.currency.brainrot + amount
     state.currency.total_brainrot = state.currency.total_brainrot + amount
 end
 
----Spend brainrot if the player can afford the amount.
+---玩家脑腐值足够时扣除指定数量。
 ---@param state PlayerGameState
 ---@param amount number
 ---@return boolean success
-function GameState.spend_brainrot(state, amount)
+function PlayerState.spend_brainrot(state, amount)
     if state.currency.brainrot < amount then
         return false
     end
@@ -84,4 +86,4 @@ function GameState.spend_brainrot(state, amount)
     return true
 end
 
-return GameState
+return PlayerState

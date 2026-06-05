@@ -1,12 +1,13 @@
--- ============================================================
--- Systems/SkinSystem.lua
--- Pure resolution of the unlocked skin tier from a brainrot value.
--- ============================================================
+--[[
+Clicker/SkinSystem.lua
+
+皮肤档位计算：根据累计脑腐值解析当前可用的最高皮肤。
+]]
 
 local SkinSystem = {}
 
----Return the highest skin index whose threshold is reached by the value.
----Skins must be ordered ascending by threshold; index 1 is the base tier.
+---返回已达到门槛的最高皮肤索引。
+---skins 需要按 threshold 升序排列；索引 1 是基础皮肤。
 ---@param skins table[] ordered skin tiers, each with a numeric `threshold`
 ---@param value number lifetime brainrot
 ---@return integer tier_index

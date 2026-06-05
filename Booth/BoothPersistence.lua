@@ -1,21 +1,26 @@
--- ============================================================
--- Systems/BoothPersistence.lua
--- Serialize BoothState <-> JSON and read/write it to the player archive.
---
--- The whole booth state goes into ONE Str archive slot as a JSON blob
--- (the engine has no JSON and no per-field table archive that fits a
--- variable nested shape). Archive I/O is per-Role and immediate
--- (no commit/flush). All access is guarded by is_archives_enabled().
---
--- Serialized shape (string object keys, so the encoder never mistakes
--- an integer-keyed map for an array — only `zones` is a JSON array):
---   { "zones": [1, 2],
---     "placements": { "<zone>": { "<booth>": { "item_id": id, "attrs": {..} } } } }
--- ============================================================
+--[[
+Booth/BoothPersistence.lua
+
+展台状态持久化：BoothState <-> JSON，并读写到玩家存档。
+
+整份展台状态写入一个 Str 类型存档位，内容是 JSON 字符串。引擎没有内置 JSON，
+也没有适合这种可变嵌套结构的逐字段表存档，所以这里统一编码为字符串。
+存档读写以 Role 为单位立即生效，不需要额外 commit / flush。
+
+序列化结构：
+  {
+    "zones": [1, 2],
+    "placements": {
+      "<zone>": { "<booth>": { "item_id": id, "attrs": {..} } }
+    }
+  }
+
+对象键统一转成字符串，避免编码器把整数键表误判成数组；只有 zones 是 JSON 数组。
+]]
 
 local ArchiveKeys = require("Data.ArchiveKeys")
-local BoothConfig = require("Data.BoothConfig")
-local BoothState = require("Systems.BoothState")
+local BoothConfig = require("Booth.BoothConfig")
+local BoothState = require("Booth.BoothState")
 local Json = require("Util.Json")
 
 local BoothPersistence = {}
@@ -44,8 +49,10 @@ local function set_decoded_attr(attr, value, attrs)
     end
 end
 
--- JSON object keys decode as strings; parse them to ints WITHOUT the
--- sandboxed global `tonumber`.
+--[[
+JSON 对象键解码后是字符串。
+沙盒里没有全局 tonumber，所以这里手写一个只解析整数字符串的转换函数。
+]]
 ---@param key string
 ---@return integer
 local function key_to_int(key)
@@ -84,11 +91,11 @@ local function key_to_int(key)
     return sign * value
 end
 
--- ---------- serialize ----------
+-- ---------- 序列化 ----------
 
----Convert runtime state to a JSON string. Zone / booth keys are stringified
----so they stay JSON objects (only `zones` is a JSON array); Json.encode sorts
----object keys itself, so the output is already deterministic.
+---把运行时状态转为 JSON 字符串。
+---展区 / 展台位的键会转成字符串，保证它们保持 JSON 对象；只有 zones 是数组。
+---Json.encode 会排序对象键，所以输出天然稳定。
 ---@param state BoothState
 ---@return string json
 function BoothPersistence.to_json(state)
@@ -116,11 +123,10 @@ function BoothPersistence.to_json(state)
     })
 end
 
--- ---------- deserialize ----------
+-- ---------- 反序列化 ----------
 
----Rebuild runtime state from a JSON string, validating against current
----config. Unknown zones/booths/items are dropped (forward compatible);
----malformed input falls back to a fresh state.
+---从 JSON 字符串重建运行时状态，并按当前配置校验。
+---未知展区、展台位和物品会被丢弃，格式错误时退回新状态。
 ---@param str string
 ---@return BoothState state
 function BoothPersistence.from_json(str)
@@ -131,7 +137,7 @@ function BoothPersistence.from_json(str)
 
     local state = { unlocked = {}, placements = {} }
 
-    -- Unlocked zones: keep only ids that still exist in config.
+    -- 已解锁展区：只保留当前配置里仍存在的 id。
     if type(data.zones) == "table" then
         for _, zone_id in ipairs(data.zones) do
             local id = to_int(zone_id)
@@ -140,10 +146,10 @@ function BoothPersistence.from_json(str)
             end
         end
     end
-    -- The default zone is always unlocked, even if an old blob omitted it.
+    -- 默认展区始终解锁，即使旧存档里漏了它。
     state.unlocked[BoothConfig.DEFAULT_UNLOCKED_ZONE_ID] = true
 
-    -- Placements: validate zone unlocked + booth valid + item configured.
+    -- 放置物：校验展区已解锁、展台位合法、物品已配置。
     if type(data.placements) == "table" then
         for zone_key, zone_placements in pairs(data.placements) do
             local zone_id = key_to_int(zone_key)
@@ -169,7 +175,7 @@ function BoothPersistence.from_json(str)
     return state
 end
 
--- ---------- archive I/O ----------
+-- ---------- 存档读写 ----------
 
 ---@return boolean
 local function archives_ready()

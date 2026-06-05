@@ -1,17 +1,16 @@
--- ============================================================
--- Systems/BoothState.lua
--- Per-player booth runtime state and pure state operations.
---
--- State shape (see ---@class below):
---   unlocked[zone_id]                = true            -- 已解锁区（只存标记）
---   placements[zone_id][booth_index] = { item_id, attrs }  -- 放置的物品实例
---
--- Pure functions mutate a passed-in state, never global — mirrors
--- Systems/ShopSystem.lua. Persistence/serialization lives elsewhere
--- (Systems/BoothPersistence.lua).
--- ============================================================
+--[[
+Booth/BoothState.lua
 
-local BoothConfig = require("Data.BoothConfig")
+单个玩家的展台运行时状态，以及只修改传入 state 的纯状态操作。
+
+状态结构（详见下方 ---@class）：
+  unlocked[zone_id]                = true                  已解锁区（只存标记）
+  placements[zone_id][booth_index] = { item_id, attrs }    放置的物品实例
+
+这些函数不持有全局玩家状态；存档和序列化放在 Booth/BoothPersistence.lua。
+]]
+
+local BoothConfig = require("Booth.BoothConfig")
 
 ---@alias BoothAttrValue integer|string
 
@@ -25,7 +24,7 @@ local BoothConfig = require("Data.BoothConfig")
 
 local BoothState = {}
 
----Shallow-copy a flat attribute table.
+---复制一层扁平属性表。
 ---@param attrs table<string, BoothAttrValue>|nil
 ---@return table<string, BoothAttrValue>
 local function copy_attrs(attrs)
@@ -38,7 +37,7 @@ local function copy_attrs(attrs)
     return result
 end
 
----Create a fresh state: only the default zone unlocked, nothing placed.
+---创建新状态：只解锁默认展区，所有展台位为空。
 ---@return BoothState state
 function BoothState.new()
     return {
@@ -54,8 +53,8 @@ function BoothState.is_zone_unlocked(state, zone_id)
     return state.unlocked[zone_id] == true
 end
 
----Mark a zone unlocked. Returns false if the zone id is not configured.
----This is the unconditional path (used by DebugTools / 后台强制解锁)。
+---标记展区已解锁。展区未配置时返回 false。
+---这是无条件解锁路径，供 DebugTools / 后台强制解锁使用。
 ---@param state BoothState
 ---@param zone_id integer
 ---@return boolean success
@@ -102,7 +101,7 @@ function BoothState.can_unlock(state, zone_id)
 
     local condition = select(1, BoothConfig.get_unlock(zone_id))
     -- 条件占位：目前 unlock_condition 为空表，恒视为满足。
-    -- TODO(策划/玩法)：在此读取 condition 字段做真实判定（前置区、收集数等）。
+    -- 待处理(策划/玩法)：在此读取 condition 字段做真实判定（前置区、收集数等）。
     if type(condition) == "table" and next(condition) ~= nil then
         -- 预留分支：一旦条件非空，默认未实现的条件视为不满足，避免误放行。
         return false, "condition_unimplemented"
@@ -136,9 +135,9 @@ function BoothState.get_placement(state, zone_id, booth_index)
     return zone_placements[booth_index]
 end
 
----Place an item on a booth. Requires the zone unlocked, the booth valid,
----and the item configured. The item's configured base_attrs are copied
----first, then any passed-in attrs override them.
+---在展台位上放置物品。
+---要求展区已解锁、展台位合法、物品已配置。先复制配置里的 base_attrs，
+---再用传入 attrs 覆盖。
 ---@param state BoothState
 ---@param zone_id integer
 ---@param booth_index integer
@@ -177,7 +176,7 @@ function BoothState.place_item(state, zone_id, booth_index, item_id, attrs)
     return true
 end
 
----Remove whatever is placed on a booth (no-op if empty).
+---移除展台位上的物品；空位返回 false。
 ---@param state BoothState
 ---@param zone_id integer
 ---@param booth_index integer
@@ -191,7 +190,7 @@ function BoothState.remove_item(state, zone_id, booth_index)
     return true
 end
 
----Set one attribute value on a placed item instance (per-instance mutation).
+---修改已放置物品实例的单个属性。
 ---@param state BoothState
 ---@param zone_id integer
 ---@param booth_index integer

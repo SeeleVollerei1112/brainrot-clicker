@@ -1,17 +1,17 @@
--- ============================================================
--- UI/FloatText.lua
--- Role-isolated rising animation for click-income labels.
---
--- Each role owns one moving label per channel. Vertical motion is
--- driven at runtime by GameAPI.set_eui_node_bottom_auto_adaption,
--- while font size and opacity are animated through per-role render
--- overrides. Because position is a global node property, every role
--- keeps a private node set so other clients never see the movement.
--- ============================================================
+--[[
+Clicker/FloatTextView.lua
+
+点击收益飘字表现层。
+
+每个玩家每条飘字通道都有自己的移动文本节点。垂直位移通过
+GameAPI.set_eui_node_bottom_auto_adaption 驱动，字号和透明度用玩家维度
+渲染接口覆盖。由于节点位置是全局属性，每个玩家必须使用独立节点组，
+这样不同客户端不会互相看到位移动画。
+]]
 
 local FloatText = {}
-local UIConfig = require("Data.UIConfig")
-local configuration = UIConfig.FLOAT_TEXT
+local ClickerConfig = require("Clicker.ClickerConfig")
+local configuration = ClickerConfig.FLOAT_TEXT
 local canvas = nil
 local nodes_by_role_id = {}
 local animation_generations_by_role_id = {}
@@ -73,7 +73,7 @@ local function get_animation_generations(role_id)
     return animation_generations_by_role_id[role_id]
 end
 
----Capture the canvas; per-role nodes are created lazily in initialize_role.
+---记录画布；玩家自己的飘字节点在 initialize_role 中创建。
 ---@param target_canvas ECanvas
 function FloatText.initialize(target_canvas)
     lifecycle_generation = lifecycle_generation + 1
@@ -82,7 +82,7 @@ function FloatText.initialize(target_canvas)
     canvas = target_canvas
 end
 
----Create and style this role's private channel labels.
+---创建并设置当前玩家自己的飘字通道节点。
 ---@param role Role
 function FloatText.initialize_role(role)
     local role_id = get_role_id(role)
@@ -116,7 +116,7 @@ function FloatText.initialize_role(role)
     nodes_by_role_id[role_id] = channels
 end
 
----Recolor a role's float labels (outline is left unchanged).
+---修改玩家飘字颜色，描边保持不变。
 ---@param role Role
 ---@param color integer
 function FloatText.set_color(role, color)
@@ -136,7 +136,7 @@ function FloatText.set_color(role, color)
     end
 end
 
----Play one floating income label for a role.
+---播放一次收益飘字。
 ---@param role Role
 ---@param amount number
 function FloatText.show(role, amount)
@@ -188,7 +188,7 @@ function FloatText.show(role, amount)
     show_frame(1)
 end
 
----Hide and drop one role's nodes when they leave the game.
+---玩家离开时隐藏并移除他的飘字节点。
 ---@param role Role
 function FloatText.cleanup_role(role)
     local role_id = get_role_id(role)
@@ -206,7 +206,7 @@ function FloatText.cleanup_role(role)
     animation_generations_by_role_id[role_id] = nil
 end
 
----Invalidate delayed callbacks during game shutdown.
+---关闭玩法时让延迟回调失效。
 function FloatText.shutdown()
     lifecycle_generation = lifecycle_generation + 1
     animation_generations_by_role_id = {}

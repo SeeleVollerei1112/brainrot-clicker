@@ -1,18 +1,18 @@
--- ============================================================
--- Booth/BoothController.lua
--- Booth save-layer lifecycle + per-player state registry.
---
--- Holds each player's BoothState (keyed by role_id), loads it on join
--- and saves it on leave — wired from GameController exactly like the
--- Lottery/Inventory controllers. Also exposes coarse operations used by
--- the DebugTools plugin buttons (each mutation auto-saves for testing).
---
--- This is the SAVE/data layer only; no booth EUI or placement gameplay.
--- ============================================================
+--[[
+Booth/BoothController.lua
 
-local BoothConfig = require("Data.BoothConfig")
-local BoothState = require("Systems.BoothState")
-local BoothPersistence = require("Systems.BoothPersistence")
+展台存档控制层：负责玩家展台状态的生命周期和角色维度状态表。
+
+每个玩家持有一份 BoothState（以 role_id 为键），进入时读取，离开时保存。
+接入方式与 Lottery / Inventory 控制器一致。这里也暴露 DebugTools 使用的
+粗粒度操作，每次状态变更都会立即保存，方便阶段测试。
+
+这里只处理存档和数据，不放 EUI 与世界放置逻辑。
+]]
+
+local BoothConfig = require("Booth.BoothConfig")
+local BoothState = require("Booth.BoothState")
+local BoothPersistence = require("Booth.BoothPersistence")
 
 local BoothController = {}
 
@@ -26,13 +26,13 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
----Shared init hook (kept for parity with other controllers). No-op for now.
+---初始化入口；当前存档层无需注册引擎事件，保留签名与其它控制器一致。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 function BoothController.initialize(register_trigger)
     -- 存档层暂无需注册引擎事件；保留签名与其它控制器一致。
 end
 
----Load (or freshly create) a joining player's booth state.
+---玩家进入时读取或创建展台状态。
 ---@param role Role
 function BoothController.initialize_role(role)
     local role_id = get_role_id(role)
@@ -42,7 +42,7 @@ function BoothController.initialize_role(role)
     state_by_role_id[role_id] = BoothPersistence.load(role)
 end
 
----Persist and drop a leaving player's booth state.
+---玩家离开时保存并移除展台状态。
 ---@param role Role
 function BoothController.cleanup_role(role)
     local role_id = get_role_id(role)
@@ -56,7 +56,7 @@ function BoothController.cleanup_role(role)
     state_by_role_id[role_id] = nil
 end
 
----Get a player's live booth state (lazily creating one if absent).
+---获取玩家当前展台状态；不存在时现场读取。
 ---@param role Role
 ---@return BoothState|nil state
 function BoothController.get_state(role)
@@ -72,7 +72,7 @@ function BoothController.get_state(role)
     return state
 end
 
----Read what is placed on a booth (nil if empty / no state). Read-only.
+---只读查询某个展台位上的放置物。
 ---@param role Role
 ---@param zone_id integer
 ---@param booth_index integer
@@ -85,7 +85,7 @@ function BoothController.get_placement(role, zone_id, booth_index)
     return BoothState.get_placement(state, zone_id, booth_index)
 end
 
----Persist a player's current state immediately.
+---立即保存玩家当前展台状态。
 ---@param role Role
 function BoothController.save_now(role)
     local state = BoothController.get_state(role)
@@ -94,7 +94,7 @@ function BoothController.save_now(role)
     end
 end
 
----Serialize a player's current state to JSON (for debug inspection).
+---把玩家当前展台状态序列化为 JSON，供调试查看。
 ---@param role Role
 ---@return string json
 function BoothController.dump_json(role)
@@ -105,7 +105,7 @@ function BoothController.dump_json(role)
     return BoothPersistence.to_json(state)
 end
 
--- ---------- coarse mutations (auto-save; used by DebugTools) ----------
+-- ---------- 粗粒度状态变更（自动保存，供 DebugTools 使用） ----------
 
 ---强制解锁（不校验条件/成本）。供 DebugTools 后台直接解锁使用。
 ---@param role Role

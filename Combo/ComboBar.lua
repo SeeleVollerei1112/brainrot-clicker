@@ -1,12 +1,12 @@
--- ============================================================
--- UI/ComboBar.lua
--- Render Combo progress and role-isolated multiplier animations.
--- ============================================================
+--[[
+Combo/ComboBar.lua
+
+连击条表现层：渲染连击进度，并按玩家隔离倍率弹跳动画。
+]]
 
 local ComboBar = {}
-local GameConfig = require("Data.GameConfig")
-local UIConfig = require("Data.UIConfig")
-local configuration = UIConfig.COMBO_BAR
+local ComboConfig = require("Combo.ComboConfig")
+local configuration = ComboConfig.BAR
 local nodes = {}
 local animation_generations_by_role_id = {}
 local lifecycle_generation = 0
@@ -104,7 +104,7 @@ local function play_pop_animation(role)
     end)
 end
 
----Bind the editor-authored Combo nodes once.
+---绑定编辑器内已搭好的连击节点。
 ---@param canvas ECanvas
 function ComboBar.initialize(canvas)
     lifecycle_generation = lifecycle_generation + 1
@@ -113,7 +113,7 @@ function ComboBar.initialize(canvas)
     nodes.label = fetch_child(nodes.bar or canvas, configuration.nodes.label)
 end
 
----Initialize Combo rendering for one role.
+---初始化单个玩家看到的连击表现。
 ---@param role Role
 function ComboBar.initialize_role(role)
     if not role or not nodes.bar then
@@ -121,14 +121,14 @@ function ComboBar.initialize_role(role)
     end
 
     role.set_progressbar_min(nodes.bar, 0)
-    role.set_progressbar_max(nodes.bar, GameConfig.COMBO_MAX)
+    role.set_progressbar_max(nodes.bar, ComboConfig.MAX)
     role.set_progressbar_current(nodes.bar, 0)
     if nodes.label then
         role.set_node_visible(nodes.label, false)
     end
 end
 
----Render the current Combo energy.
+---渲染当前连击能量。
 ---@param role Role
 ---@param state PlayerGameState
 function ComboBar.render_progress(role, state)
@@ -136,11 +136,11 @@ function ComboBar.render_progress(role, state)
         return
     end
 
-    local current_value = math.tointeger(math.min(state.combo.count, GameConfig.COMBO_MAX))
+    local current_value = math.tointeger(math.min(state.combo.count, ComboConfig.MAX))
     role.set_progressbar_transition(nodes.bar, current_value, math.tofixed(configuration.progress_transition))
 end
 
----Render a tier transition and play its feedback.
+---渲染倍率档位变化并播放反馈。
 ---@param role Role
 ---@param old_tier integer
 ---@param new_tier integer
@@ -166,13 +166,13 @@ function ComboBar.handle_tier_change(role, old_tier, new_tier)
     play_pop_animation(role)
 end
 
----Replay multiplier feedback for another click inside the same tier.
+---同一倍率档内再次点击时重播反馈。
 ---@param role Role
 function ComboBar.pop(role)
     play_pop_animation(role)
 end
 
----Invalidate delayed callbacks during game shutdown.
+---关闭玩法时让延迟回调失效。
 function ComboBar.shutdown()
     lifecycle_generation = lifecycle_generation + 1
     animation_generations_by_role_id = {}
