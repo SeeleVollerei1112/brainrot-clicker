@@ -5,6 +5,7 @@
 
 local GameController = require("Controllers.GameController")
 
+
 LuaAPI.global_register_trigger_event(
     { EVENT.GAME_INIT },
     function()

@@ -9,15 +9,26 @@
 -- 数值属性统一用整数，规避 Fix32 在 JSON 序列化中的小数串问题；
 -- name 作为实例展示名保存，支持后续单实例改名或配置改名后的存档稳定展示。
 -- 这里同时充当本阶段的测试数据来源（3 个区 + 5 个物品）。
+--
+-- 场景对接（运行时实测，2026-06-05）：
+--   每个展台位在编辑器中各有一个独立的「事件触发区域」(CustomTriggerSpace,
+--   prefab key = BOOTH_TRIGGER_KEY)，命名规则为
+--       <展区名>_展示台_<序号>_触发区   （序号从 1 起）
+--   例如「新手展区_展示台_1_触发区」。代码据此用 LuaAPI.query_unit(name)
+--   反查触发区域并绑定进出事件，无需在区域上额外配置自定义值。
+--   见 BoothConfig.booth_trigger_name / Booth/BoothInteraction.lua。
 -- ============================================================
 
 ---@class BoothZoneConfig
 ---@field id integer
 ---@field name string
 ---@field booth_count integer
+---@field unlock_condition table   解锁条件占位（留空待策划填充；空表=无条件）
+---@field unlock_cost integer      解锁成本占位（0=免费/暂不消耗）
 
 ---@class BoothItemConfig
 ---@field id integer
+---@field prefab_id integer|nil    放置到场景时创建的物品预设编号(EquipmentKey)；nil=尚未导出
 ---@field base_attrs table<string, integer|string>
 
 ---@class BoothConfig
@@ -25,20 +36,37 @@ local BoothConfig = {
     -- 开局默认解锁的展台区
     DEFAULT_UNLOCKED_ZONE_ID = 1,
 
+    -- 展台位事件触发区域的 prefab 编号（场景内所有展台触发区共用此 key）。
+    BOOTH_TRIGGER_KEY = 31010112,
+
+    -- 触发区域命名规则的固定中缀/后缀（拼出 <展区名>_展示台_<序号>_触发区）。
+    TRIGGER_NAME_INFIX = "_展示台_",
+    TRIGGER_NAME_SUFFIX = "_触发区",
+
+    -- 放置物品时相对触发区域中心的高度偏移（让物品落在展台台面上，按需微调）。
+    PLACEMENT_Y_OFFSET = 0.0,
+
+    -- 进入展台后显示的交互按钮节点名（由编辑器导出到 Data/UINodes.lua 后即被引用；
+    -- 若尚未导出，运行时会安全跳过并打日志）。
+    UI = {
+        place_button = "展台放置按钮",
+        recycle_button = "展台回收按钮",
+    },
+
     ---@type BoothZoneConfig[]
     ZONES = {
-        { id = 1, name = "新手展区", booth_count = 4 },
-        { id = 2, name = "进阶展区", booth_count = 6 },
-        { id = 3, name = "大师展区", booth_count = 6 },
+        { id = 1, name = "新手展区", booth_count = 4, unlock_condition = {}, unlock_cost = 0 },
+        { id = 2, name = "进阶展区", booth_count = 6, unlock_condition = {}, unlock_cost = 0 },
+        { id = 3, name = "大师展区", booth_count = 6, unlock_condition = {}, unlock_cost = 0 },
     },
 
     ---@type BoothItemConfig[]
     ITEMS = {
-        { id = 101, base_attrs = { name = "脑红1", income_per_second = 5, level = 1 } },
-        { id = 102, base_attrs = { name = "脑红2", income_per_second = 12, level = 1 } },
-        { id = 103, base_attrs = { name = "脑红3", income_per_second = 30, level = 1 } },
-        { id = 104, base_attrs = { name = "脑红4", income_per_second = 18, level = 1 } },
-        { id = 105, base_attrs = { name = "脑红5", income_per_second = 45, level = 1 } },
+        { id = 101, prefab_id = 1073741848, base_attrs = { name = "脑红1", income_per_second = 5, level = 1 } },
+        { id = 102, prefab_id = 1073774688, base_attrs = { name = "脑红2", income_per_second = 12, level = 1 } },
+        { id = 103, prefab_id = 1073786911, base_attrs = { name = "脑红3", income_per_second = 30, level = 1 } },
+        { id = 104, prefab_id = 1073795119, base_attrs = { name = "脑红4", income_per_second = 18, level = 1 } },
+        { id = 105, prefab_id = 1073807366, base_attrs = { name = "脑红5", income_per_second = 45, level = 1 } },
     },
 }
 
@@ -66,6 +94,21 @@ function BoothConfig.find_item(item_id)
     return nil
 end
 
+---按物品预设编号反查物品类型（放置/回收时把背包装备映射回 item_id）。
+---@param prefab_id integer|nil
+---@return BoothItemConfig|nil
+function BoothConfig.find_item_by_prefab(prefab_id)
+    if prefab_id == nil then
+        return nil
+    end
+    for _, item in ipairs(BoothConfig.ITEMS) do
+        if item.prefab_id == prefab_id then
+            return item
+        end
+    end
+    return nil
+end
+
 ---校验 (区, 展台位) 是否合法（区存在且位索引在范围内）。
 ---@param zone_id integer
 ---@param booth_index integer
@@ -79,6 +122,69 @@ function BoothConfig.is_valid_booth(zone_id, booth_index)
         return false
     end
     return booth_index >= 0 and booth_index < zone.booth_count
+end
+
+---拼出某展台位事件触发区域的场景命名（序号从 1 起 = booth_index + 1）。
+---@param zone_id integer
+---@param booth_index integer
+---@return string|nil name
+function BoothConfig.booth_trigger_name(zone_id, booth_index)
+    local zone = BoothConfig.find_zone(zone_id)
+    if not zone or not BoothConfig.is_valid_booth(zone_id, booth_index) then
+        return nil
+    end
+    return zone.name
+        .. BoothConfig.TRIGGER_NAME_INFIX
+        .. tostring(booth_index + 1)
+        .. BoothConfig.TRIGGER_NAME_SUFFIX
+end
+
+---拼出某展台位「展台模型(展示台)」的场景命名 = <展区名>_展示台_<序号>。
+---即触发区域名去掉「_触发区」后缀（序号从 1 起 = booth_index + 1）。
+---⚠ 名称约定与触发区一致，但展台模型节点名未经运行时实测，编辑器恢复后需核对。
+---@param zone_id integer
+---@param booth_index integer
+---@return string|nil name
+function BoothConfig.booth_stand_name(zone_id, booth_index)
+    local zone = BoothConfig.find_zone(zone_id)
+    if not zone or not BoothConfig.is_valid_booth(zone_id, booth_index) then
+        return nil
+    end
+    return zone.name .. BoothConfig.TRIGGER_NAME_INFIX .. tostring(booth_index + 1)
+end
+
+---拼出某展台区「公告板」的场景命名。优先用 zone.board_name 覆盖，
+---否则默认 <展区名>_公告板。
+---⚠ 默认后缀「_公告板」未经运行时实测，编辑器恢复后需核对/在 ZONES.board_name 修正。
+---@param zone_id integer
+---@return string|nil name
+function BoothConfig.zone_board_name(zone_id)
+    local zone = BoothConfig.find_zone(zone_id)
+    if not zone then
+        return nil
+    end
+    return zone.board_name or (zone.name .. "_公告板")
+end
+
+---遍历所有 (zone_id, booth_index, trigger_name)。供交互层批量绑定触发区域。
+---@param callback fun(zone_id: integer, booth_index: integer, trigger_name: string)
+function BoothConfig.for_each_booth(callback)
+    for _, zone in ipairs(BoothConfig.ZONES) do
+        for booth_index = 0, zone.booth_count - 1 do
+            callback(zone.id, booth_index, BoothConfig.booth_trigger_name(zone.id, booth_index))
+        end
+    end
+end
+
+---获取某展台区的解锁字段（条件占位 + 成本）。
+---@param zone_id integer
+---@return table|nil unlock_condition, integer|nil unlock_cost
+function BoothConfig.get_unlock(zone_id)
+    local zone = BoothConfig.find_zone(zone_id)
+    if not zone then
+        return nil, nil
+    end
+    return zone.unlock_condition or {}, zone.unlock_cost or 0
 end
 
 return BoothConfig

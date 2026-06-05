@@ -1,0 +1,233 @@
+-- ============================================================
+-- Booth/BoothInteraction.lua
+-- 展台交互层：玩家进出每个展台位的「事件触发区域」时，按当前状态显隐
+-- 「放置 / 回收」按钮；点击按钮则对玩家所在展台位执行放置/回收。
+--
+-- 触发区域按命名(BoothConfig.booth_trigger_name)用 LuaAPI.query_unit 反查，
+-- 逐个注册 ANY_LIFEENTITY_TRIGGER_SPACE 的 ENTER / LEAVE，建立
+-- trigger_zone_id -> (zone_id, booth_index) 注册表。
+--
+-- 「放置/回收」按钮节点由编辑器导出到 Data/UINodes.lua（名字见 BoothConfig.UI）；
+-- 若尚未导出，运行时安全跳过显隐并打日志。按钮显隐用 set_node_visible（与背包/
+-- 商城一致：同时摘除隐藏页触摸响应）。
+-- ============================================================
+local BoothConfig = require("Data.BoothConfig")
+local BoothPlacement = require("Booth.BoothPlacement")
+local BoothZoneView = require("Booth.BoothZoneView")
+local UINodes = require("Data.UINodes")
+local UIConfig = require("Data.UIConfig")
+
+local BoothInteraction = {}
+
+local TOUCH_CLICK = UIConfig.TOUCH.CLICK
+local ENTER = Enums.TriggerSpaceEventType.ENTER
+local LEAVE = Enums.TriggerSpaceEventType.LEAVE
+
+-- trigger_zone_id -> { zone_id, booth_index }
+---@type table<CustomTriggerSpaceID, { zone_id: integer, booth_index: integer }>
+local booth_by_zone_id = {}
+
+-- current_booth[role_id] = { zone_id, booth_index }（玩家当前所在展台位）
+---@type table<RoleID, { zone_id: integer, booth_index: integer }>
+local current_booth = {}
+
+local place_button = nil
+local recycle_button = nil
+
+---@param node any
+---@return boolean
+local function is_node(node)
+    return node ~= nil and node ~= false and node ~= 0 and node ~= ""
+end
+
+---@param role Role
+---@return RoleID|nil
+local function get_role_id(role)
+    local ctrl = role and role.get_ctrl_unit()
+    return ctrl and ctrl.get_role_id() or nil
+end
+
+---LifeEntity(触发单位) -> 控制它的玩家（非玩家角色返回 nil）。
+---@param life_entity any
+---@return Role|nil
+local function entity_to_role(life_entity)
+    if not life_entity then
+        return nil
+    end
+    local role = nil
+    pcall(function() role = life_entity.get_ctrl_role() end)
+    return role
+end
+
+---按某展台位的占用/背包情况，显隐放置/回收按钮。
+---@param role Role
+---@param zone_id integer
+---@param booth_index integer
+local function update_buttons(role, zone_id, booth_index)
+    local occupied = BoothPlacement.is_occupied(role, zone_id, booth_index)
+    local can_place = (not occupied) and BoothPlacement.has_placeable_item(role)
+
+    if is_node(place_button) then
+        role.set_node_visible(place_button, can_place)
+    end
+    if is_node(recycle_button) then
+        role.set_node_visible(recycle_button, occupied)
+    end
+end
+
+---隐藏两个交互按钮。
+---@param role Role
+local function hide_buttons(role)
+    if is_node(place_button) then
+        role.set_node_visible(place_button, false)
+    end
+    if is_node(recycle_button) then
+        role.set_node_visible(recycle_button, false)
+    end
+end
+
+---进入某展台位触发区域。
+---@param role Role
+---@param zone_id integer
+---@param booth_index integer
+local function on_enter(role, zone_id, booth_index)
+    local role_id = get_role_id(role)
+    if not role_id then
+        return
+    end
+    current_booth[role_id] = { zone_id = zone_id, booth_index = booth_index }
+    update_buttons(role, zone_id, booth_index)
+end
+
+---离开某展台位触发区域。
+---@param role Role
+---@param zone_id integer
+---@param booth_index integer
+local function on_leave(role, zone_id, booth_index)
+    local role_id = get_role_id(role)
+    if not role_id then
+        return
+    end
+    -- 仅当离开的是「当前记录的展台位」才清除（避免先进后离的乱序覆盖）。
+    local cur = current_booth[role_id]
+    if cur and cur.zone_id == zone_id and cur.booth_index == booth_index then
+        current_booth[role_id] = nil
+    end
+    hide_buttons(role)
+end
+
+---点击放置/回收后，对玩家当前展台位执行操作并刷新按钮。
+---@param role Role
+---@param action fun(role: Role, zone_id: integer, booth_index: integer): boolean, string
+local function run_action_on_current(role, action)
+    local role_id = get_role_id(role)
+    local cur = role_id and current_booth[role_id]
+    if not cur then
+        return
+    end
+    action(role, cur.zone_id, cur.booth_index)
+    -- 操作后状态变化（占用/背包），重新评估按钮。
+    update_buttons(role, cur.zone_id, cur.booth_index)
+    -- 放置/回收改变了该区物品，刷新公告板收益展示。
+    BoothZoneView.refresh_zone(role, cur.zone_id)
+end
+
+---注册每个展台位触发区域的进出事件。
+---@param register_trigger fun(event_arguments: table, callback: function): integer
+local function bind_zone_triggers(register_trigger)
+    local bound, missing = 0, 0
+    BoothConfig.for_each_booth(function(zone_id, booth_index, trigger_name)
+        local unit = trigger_name and LuaAPI.query_unit(trigger_name)
+        if not unit then
+            missing = missing + 1
+            LuaAPI.log("[BoothInteraction] 找不到展台触发区域: " .. tostring(trigger_name), 1)
+            return
+        end
+        local zone_unit_id = LuaAPI.get_unit_id(unit)
+        booth_by_zone_id[zone_unit_id] = { zone_id = zone_id, booth_index = booth_index }
+
+        register_trigger(
+            { EVENT.ANY_LIFEENTITY_TRIGGER_SPACE, ENTER, zone_unit_id },
+            function(event_name, actor, data)
+                local role = entity_to_role(data and data.event_unit)
+                if role then
+                    on_enter(role, zone_id, booth_index)
+                end
+            end
+        )
+        register_trigger(
+            { EVENT.ANY_LIFEENTITY_TRIGGER_SPACE, LEAVE, zone_unit_id },
+            function(event_name, actor, data)
+                local role = entity_to_role(data and data.event_unit)
+                if role then
+                    on_leave(role, zone_id, booth_index)
+                end
+            end
+        )
+        bound = bound + 1
+    end)
+    LuaAPI.log("[BoothInteraction] 展台触发区域绑定完成 bound=" .. bound .. " missing=" .. missing, 0)
+end
+
+---注册放置/回收按钮点击。
+---@param register_trigger fun(event_arguments: table, callback: function): integer
+local function bind_buttons(register_trigger)
+    if is_node(place_button) then
+        register_trigger(
+            { EVENT.EUI_NODE_TOUCH_EVENT, place_button, TOUCH_CLICK },
+            function(event_name, actor, data)
+                if data and data.role then
+                    run_action_on_current(data.role, BoothPlacement.place)
+                end
+            end
+        )
+    else
+        LuaAPI.log("[BoothInteraction] 缺少放置按钮节点(待导出): " .. tostring(BoothConfig.UI.place_button), 1)
+    end
+
+    if is_node(recycle_button) then
+        register_trigger(
+            { EVENT.EUI_NODE_TOUCH_EVENT, recycle_button, TOUCH_CLICK },
+            function(event_name, actor, data)
+                if data and data.role then
+                    run_action_on_current(data.role, BoothPlacement.recycle)
+                end
+            end
+        )
+    else
+        LuaAPI.log("[BoothInteraction] 缺少回收按钮节点(待导出): " .. tostring(BoothConfig.UI.recycle_button), 1)
+    end
+end
+
+---GAME_INIT 时由 GameController 调用：解析按钮节点 + 绑定触发区域与按钮。
+---@param register_trigger fun(event_arguments: table, callback: function): integer
+function BoothInteraction.initialize(register_trigger)
+    booth_by_zone_id = {}
+    current_booth = {}
+    place_button = UINodes[BoothConfig.UI.place_button]
+    recycle_button = UINodes[BoothConfig.UI.recycle_button]
+
+    bind_zone_triggers(register_trigger)
+    bind_buttons(register_trigger)
+    LuaAPI.log("[BoothInteraction] 展台交互初始化完成", 0)
+end
+
+---玩家会话创建时：初始隐藏交互按钮。
+---@param role Role
+function BoothInteraction.initialize_role(role)
+    if not role then
+        return
+    end
+    hide_buttons(role)
+end
+
+---玩家离开：清除其当前展台位记录。
+---@param role Role
+function BoothInteraction.cleanup_role(role)
+    local role_id = get_role_id(role)
+    if role_id then
+        current_booth[role_id] = nil
+    end
+end
+
+return BoothInteraction

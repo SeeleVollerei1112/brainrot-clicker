@@ -5,8 +5,7 @@
     "syncEnabled": true,
     "excludePatterns": [
         ".vscode",
-        ".git",
-        "EggyAPI.lua"
+        ".git"
     ],
     "version": "1.0.0"
 }

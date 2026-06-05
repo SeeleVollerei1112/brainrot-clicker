@@ -55,6 +55,7 @@ function BoothState.is_zone_unlocked(state, zone_id)
 end
 
 ---Mark a zone unlocked. Returns false if the zone id is not configured.
+---This is the unconditional path (used by DebugTools / 后台强制解锁)。
 ---@param state BoothState
 ---@param zone_id integer
 ---@return boolean success
@@ -64,6 +65,63 @@ function BoothState.unlock_zone(state, zone_id)
     end
     state.unlocked[zone_id] = true
     return true
+end
+
+---重新锁定某展台区（撤销解锁）。默认解锁区不允许被锁，避免开局无可用区。
+---主要供调试/重置使用（DebugTools）。
+---@param state BoothState
+---@param zone_id integer
+---@return boolean success
+function BoothState.lock_zone(state, zone_id)
+    if not BoothConfig.find_zone(zone_id) then
+        return false
+    end
+    if zone_id == BoothConfig.DEFAULT_UNLOCKED_ZONE_ID then
+        return false
+    end
+    state.unlocked[zone_id] = nil
+    return true
+end
+
+---判定某展台区当前「是否满足解锁条件」。
+---
+---解锁条件字段（BoothZoneConfig.unlock_condition / unlock_cost）目前留空，
+---本函数即为条件判定的接入点：后续策划把条件填进 config 后，在这里读取
+---`condition` 求值即可，无需改动调用方。成本(unlock_cost)涉及货币，属于
+---有副作用的检查，放在控制层（BoothController.try_unlock_zone）处理。
+---@param state BoothState
+---@param zone_id integer
+---@return boolean ok, string reason
+function BoothState.can_unlock(state, zone_id)
+    if not BoothConfig.find_zone(zone_id) then
+        return false, "zone_not_found"
+    end
+    if BoothState.is_zone_unlocked(state, zone_id) then
+        return false, "already_unlocked"
+    end
+
+    local condition = select(1, BoothConfig.get_unlock(zone_id))
+    -- 条件占位：目前 unlock_condition 为空表，恒视为满足。
+    -- TODO(策划/玩法)：在此读取 condition 字段做真实判定（前置区、收集数等）。
+    if type(condition) == "table" and next(condition) ~= nil then
+        -- 预留分支：一旦条件非空，默认未实现的条件视为不满足，避免误放行。
+        return false, "condition_unimplemented"
+    end
+
+    return true, "ok"
+end
+
+---按解锁条件尝试解锁（满足条件才解锁）。成本扣除由控制层完成。
+---@param state BoothState
+---@param zone_id integer
+---@return boolean success, string reason
+function BoothState.try_unlock(state, zone_id)
+    local ok, reason = BoothState.can_unlock(state, zone_id)
+    if not ok then
+        return false, reason
+    end
+    state.unlocked[zone_id] = true
+    return true, "ok"
 end
 
 ---@param state BoothState

@@ -39,9 +39,10 @@
 local BoothController = nil
 local BoothState = nil
 local BoothPersistence = nil
+local BoothZoneView = nil
 
 local function load_booth_modules()
-	if BoothController and BoothState and BoothPersistence then
+	if BoothController and BoothState and BoothPersistence and BoothZoneView then
 		return true
 	end
 
@@ -65,6 +66,13 @@ local function load_booth_modules()
 		return false
 	end
 	BoothPersistence = module
+
+	ok, module = pcall(require, "Booth.BoothZoneView")
+	if not ok then
+		LuaAPI.log("[Debug] 加载 BoothZoneView 失败: " .. tostring(module), 1)
+		return false
+	end
+	BoothZoneView = module
 
 	return true
 end
@@ -230,7 +238,31 @@ function BoothUnlockZone(role_id, zone_id)
 		return
 	end
 	local ok = BoothController.unlock_zone(role, zone_id)
+	if ok and BoothZoneView then
+		BoothZoneView.refresh_zone(role, zone_id)
+	end
 	LuaAPI.log("[Debug] 解锁展台区 " .. tostring(zone_id) .. " 结果=" .. tostring(ok)
+		.. " 状态: " .. BoothController.dump_json(role), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-重新锁定展台区(撤销解锁,默认区1不可锁,用于测试未解锁视觉)
+---@param role_id RoleID 玩家ID
+---@param zone_id integer 展台区ID
+function BoothLockZone(role_id, zone_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothLockZone", role_id)
+	if not role or not BoothController then
+		return
+	end
+	local ok = BoothController.lock_zone(role, zone_id)
+	if ok and BoothZoneView then
+		BoothZoneView.refresh_zone(role, zone_id)
+	end
+	LuaAPI.log("[Debug] 重新锁定展台区 " .. tostring(zone_id) .. " 结果=" .. tostring(ok)
 		.. " 状态: " .. BoothController.dump_json(role), 0)
 end
 
@@ -253,4 +285,45 @@ function BoothPlaceItem(role_id, zone_id, booth_index, item_id)
 	LuaAPI.log("[Debug] 放置物品 z=" .. tostring(zone_id) .. " b=" .. tostring(booth_index)
 		.. " item=" .. tostring(item_id) .. " 结果=" .. tostring(ok)
 		.. " 状态: " .. BoothController.dump_json(role), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-按条件尝试解锁展台区(走 unlock_condition/unlock_cost 字段)
+---@param role_id RoleID 玩家ID
+---@param zone_id integer 展台区ID
+function BoothTryUnlockZone(role_id, zone_id)
+	if not load_booth_modules() then
+		return
+	end
+	local role = get_debug_role("BoothTryUnlockZone", role_id)
+	if not role or not BoothController then
+		return
+	end
+	local ok, reason = BoothController.try_unlock_zone(role, zone_id)
+	if ok and BoothZoneView then
+		BoothZoneView.refresh_zone(role, zone_id)
+	end
+	LuaAPI.log("[Debug] 尝试解锁展台区 " .. tostring(zone_id) .. " 结果=" .. tostring(ok)
+		.. " 原因=" .. tostring(reason) .. " 状态: " .. BoothController.dump_json(role), 0)
+end
+
+---@export_plugin
+---@style button
+---@desc 展台-给背包发一件测试物品(脑红1,用于试玩放置)
+---@param role_id RoleID 玩家ID
+function BoothGiveTestItem(role_id)
+	local role = get_debug_role("BoothGiveTestItem", role_id)
+	if not role then
+		return
+	end
+	local ch = role.get_ctrl_unit()
+	if not ch then
+		LuaAPI.log("[Debug] BoothGiveTestItem 未找到控制单位", 1)
+		return
+	end
+	local ok = pcall(function()
+		ch.create_equipment_to_slot(1073741848, Enums.EquipmentSlotType.BACKPACK)
+	end)
+	LuaAPI.log("[Debug] 给背包发测试物品 脑红1 结果=" .. tostring(ok), 0)
 end

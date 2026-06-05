@@ -4,6 +4,9 @@
 -- ============================================================
 
 local BoothController = require("Booth.BoothController")
+local BoothInteraction = require("Booth.BoothInteraction")
+local BoothPlacement = require("Booth.BoothPlacement")
+local BoothZoneView = require("Booth.BoothZoneView")
 local CharacterView = require("UI.CharacterView")
 local ComboBar = require("UI.ComboBar")
 local ComboSystem = require("Systems.ComboSystem")
@@ -40,7 +43,6 @@ local click_canvas = nil
 local launch_button = nil
 local exit_button = nil
 
----Register and retain one engine trigger for centralized shutdown.
 ---@param event_arguments table
 ---@param callback function
 ---@return integer trigger_id
@@ -108,6 +110,9 @@ local function initialize_session_views(session)
     InventoryController.initialize_role(role)
     LotteryController.initialize_role(role)
     BoothController.initialize_role(role)
+    BoothInteraction.initialize_role(role)
+    BoothPlacement.spawn_saved(role) -- 读档后把已放置的展台物品重新摆回场景
+    BoothZoneView.refresh_all(role)  -- 按解锁状态显隐展台模型 + 刷新公告板
 
     if launch_button then
         role.set_button_text(launch_button, UIConfig.APP.text.launch)
@@ -169,6 +174,8 @@ function GameController.remove_player_session(role)
     FloatText.cleanup_role(role)
     CharacterView.cleanup_role(role)
     LotteryController.cleanup_role(role)
+    BoothPlacement.clear_role(role)
+    BoothInteraction.cleanup_role(role)
     BoothController.cleanup_role(role)
     LuaAPI.log("[GameController] 玩家会话已移除: " .. tostring(role_id), 0)
 end
@@ -320,6 +327,8 @@ function GameController.initialize()
     MallController.initialize(register_trigger)
     InventoryController.initialize(register_trigger)
     BoothController.initialize(register_trigger)
+    BoothZoneView.initialize()
+    BoothInteraction.initialize(register_trigger)
 
     bind_ui_interactions()
     register_timers()
