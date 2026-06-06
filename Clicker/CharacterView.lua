@@ -80,7 +80,7 @@ local function play_squeeze(role)
 end
 
 ---绑定编辑器内的角色节点，并一次性创建皮肤特效节点。
----@param canvas ECanvas
+---@param canvas ENode
 function CharacterView.initialize(canvas)
     lifecycle_generation = lifecycle_generation + 1
     squeeze_generations_by_role_id = {}

@@ -74,7 +74,7 @@ local function get_animation_generations(role_id)
 end
 
 ---记录画布；玩家自己的飘字节点在 initialize_role 中创建。
----@param target_canvas ECanvas
+---@param target_canvas ENode
 function FloatText.initialize(target_canvas)
     lifecycle_generation = lifecycle_generation + 1
     animation_generations_by_role_id = {}

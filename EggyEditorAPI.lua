@@ -5,40 +5,6 @@
 
 Other = {}
 
----修改地图滤镜
----@param render_color_hue Fixed 色相
----@param render_color_vaule Fixed 明度
----@param render_color_sat Fixed 饱和度
----@param render_color_contrast Fixed 对比度
----@param render_color_amount Fixed 整体偏色程度
----@param render_color_midtones Color 中灰偏色
----@param render_color_midtonespower Fixed 中灰偏色程度
----@param render_color_shodows Color 暗部偏色
----@param render_color_shodowspower Fixed 暗部偏色程度
----@param render_color_hilights Color 亮部偏色
----@param render_color_hilightspower Fixed 亮部偏色程度
-function EditorAPI.change_render_color(render_color_hue, render_color_vaule, render_color_sat, render_color_contrast,
-                                       render_color_amount, render_color_midtones, render_color_midtonespower,
-                                       render_color_shodows, render_color_shodowspower, render_color_hilights,
-                                       render_color_hilightspower) end
-
----获取地图滤镜属性
----@return Dict 属性列表
-function EditorAPI.get_render_color_properties() end
-
----获取编辑器运行时状态全量快照
----@return Dict 状态快照
-function EditorAPIRuntimeStates.get_runtime_states_snapshot() end
-
----获取指定模块的运行时状态
----@param module_name Str 模块名
----@return Dict 模块状态
-function EditorAPIRuntimeStates.get_runtime_module_state(module_name) end
-
----获取运行时状态模块的 Schema 描述
----@return Dict Schema 描述
-function EditorAPIRuntimeStates.get_runtime_states_schema() end
-
 ---获取所有EUI节点ID
 ---@return List 节点ID列表
 function EditorAPI.get_all_eui_node_ids() end
@@ -480,6 +446,37 @@ function EditorAPI.switch_to_normal_canvas_edit_mode() end
 ---@return Bool 是否处于3D编辑模式
 function EditorAPI.is_in_3d_layer_edit_mode() end
 
+---修改地图滤镜
+---@param render_color_hue Fixed 色相
+---@param render_color_vaule Fixed 明度
+---@param render_color_sat Fixed 饱和度
+---@param render_color_contrast Fixed 对比度
+---@param render_color_amount Fixed 整体偏色程度
+---@param render_color_midtones Color 中灰偏色
+---@param render_color_midtonespower Fixed 中灰偏色程度
+---@param render_color_shodows Color 暗部偏色
+---@param render_color_shodowspower Fixed 暗部偏色程度
+---@param render_color_hilights Color 亮部偏色
+---@param render_color_hilightspower Fixed 亮部偏色程度
+function EditorAPI.change_render_color(render_color_hue, render_color_vaule, render_color_sat, render_color_contrast, render_color_amount, render_color_midtones, render_color_midtonespower, render_color_shodows, render_color_shodowspower, render_color_hilights, render_color_hilightspower) end
+
+---获取地图滤镜属性
+---@return Dict 属性列表
+function EditorAPI.get_render_color_properties() end
+
+---获取编辑器运行时状态全量快照
+---@return Dict 状态快照
+function EditorAPIRuntimeStates.get_runtime_states_snapshot() end
+
+---获取指定模块的运行时状态
+---@param module_name Str 模块名
+---@return Dict 模块状态
+function EditorAPIRuntimeStates.get_runtime_module_state(module_name) end
+
+---获取运行时状态模块的 Schema 描述
+---@return Dict Schema 描述
+function EditorAPIRuntimeStates.get_runtime_states_schema() end
+
 ---加载脚本模块
 ---@param name Str 模块名
 function EditorAPI.require(name) end
@@ -510,15 +507,15 @@ function EditorAPI.log(content) end
 ---@return UnitID 组件ID
 function EditorAPI.create_obstacle(unit_key, pos, parent_uid) end
 
+---删除场景中的组件
+---@param unit_id UnitID 组件ID
+function EditorAPI.destroy_obstacle(unit_id) end
+
 ---在场景中创建组件组
 ---@param group_key UnitGroupKey 组件组编号
 ---@param pos Point3 坐标
 ---@return UnitID 组件组ID
 function EditorAPI.create_unit_group(group_key, pos) end
-
----删除场景中的组件
----@param unit_id UnitID 组件ID
-function EditorAPI.destroy_obstacle(unit_id) end
 
 ---获取所有单位
 ---@return ListUnit 单位列表
@@ -534,6 +531,11 @@ function EditorAPI.get_selected_unit_ids() end
 ---@return List 单位信息列表
 function EditorAPI.query_unit_ids(pattern, reg_math) end
 
+---获取单位组件编号
+---@param unit_id UnitID 单位ID
+---@return UnitKey 组件编号
+function EditorAPI.get_unit_prefab_key(unit_id) end
+
 ---设置单位属性
 ---@param unit_id UnitID 单位ID
 ---@param attr_key Str 属性名
@@ -545,6 +547,11 @@ function EditorAPI.set_unit_attr(unit_id, attr_key, attr_value) end
 ---@param attr_key Str 属性名
 ---@return ETypeMeta 单位列表
 function EditorAPI.get_unit_attr(unit_id, attr_key) end
+
+---获取单位空间信息
+---@param unit_id UnitID 单位ID
+---@return LuaTable 空间信息数据
+function EditorAPI.get_unit_space_info(unit_id) end
 
 ---生成随机数
 ---@param a Fixed 随机范围开始
@@ -715,6 +722,16 @@ function EditorAPI.output_equipment_prefab(eid, path) end
 ---@param eid Int 预设ID
 ---@param path Str 文件路径
 function EditorAPI.output_equipment_prefab_full(eid, path) end
+
+---写入文件
+---@param file_path Str 文件路径
+---@param content Str 文件内容
+function EditorAPI.write_file(file_path, content) end
+
+---延迟调用函数
+---@param interval Fixed 间隔时间（秒）
+---@param callback Function 回调
+function EditorAPI.call_delay_time(interval, callback) end
 
 ---获取场景中所有组件的数据
 ---@return Dict 组件列表
@@ -995,3 +1012,17 @@ function EditorAPI.start_preview_stream(controller_id, width, height) end
 ---停止预览场景的帧流
 ---@param controller_id Str 控制器ID
 function EditorAPI.stop_preview_stream(controller_id) end
+
+---获取EUI树状数据
+---@return Dict UI树数据
+function EditorAPI.get_eui_tree_data() end
+
+---高亮EUI节点
+---@param node_id ENode 节点ID
+---@return Dict 节点边界信息
+function EditorAPI.highlight_eui_node(node_id) end
+
+---清除EUI高亮
+---@return Bool 是否成功
+function EditorAPI.clear_eui_highlight() end
+

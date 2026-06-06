@@ -182,7 +182,7 @@ local function hide_unused_slots(role)
 end
 
 ---绑定编辑器内已搭好的商店节点。
----@param canvas ECanvas
+---@param canvas ENode
 function UpgradeShopPanel.initialize(canvas)
     panel = fetch_child(canvas, node_names.panel, true)
     listview = nil
@@ -224,7 +224,7 @@ function UpgradeShopPanel.initialize(canvas)
 
     LuaAPI.log(
         "[UpgradeShopPanel] static slots bound items=" .. tostring(#UpgradeShopConfig.ITEMS)
-            .. " slots=" .. tostring(#static_slots),
+        .. " slots=" .. tostring(#static_slots),
         0
     )
 end
@@ -293,7 +293,8 @@ function UpgradeShopPanel.set_visible(role, visible)
         local slot_visible = visible and slot_index <= #UpgradeShopConfig.ITEMS
         set_slot_visible(role, card, slot_visible)
         if card.slot and card.icon then
-            role.set_ui_opacity(card.slot, to_fixed(slot_visible and opacity_configuration.visible or opacity_configuration.hidden))
+            role.set_ui_opacity(card.slot,
+                to_fixed(slot_visible and opacity_configuration.visible or opacity_configuration.hidden))
             if not slot_visible then
                 role.set_ui_opacity(card.icon, to_fixed(opacity_configuration.hidden))
             end

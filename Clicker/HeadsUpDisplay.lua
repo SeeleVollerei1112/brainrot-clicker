@@ -34,7 +34,7 @@ local function fetch_child(parent, name)
 end
 
 ---游戏初始化时绑定编辑器内已搭好的 HUD 节点。
----@param canvas ECanvas
+---@param canvas ENode
 function HeadsUpDisplay.initialize(canvas)
     nodes.coin = fetch_child(canvas, configuration.nodes.coin)
     nodes.brainrot = fetch_child(canvas, configuration.nodes.brainrot)

@@ -21,6 +21,8 @@ local BoothConfig = require("Booth.BoothConfig")
 ---@class BoothState
 ---@field unlocked table<integer, boolean>
 ---@field placements table<integer, table<integer, BoothItemInstance>>
+---@field zone_income table<integer, integer>  各展区随时间累计的总收益（整数，入档）
+---@field last_ts integer  收益已结算到的真实时间戳（游标，入档；0=尚无基准）
 
 local BoothState = {}
 
@@ -43,6 +45,8 @@ function BoothState.new()
     return {
         unlocked = { [BoothConfig.DEFAULT_UNLOCKED_ZONE_ID] = true },
         placements = {},
+        zone_income = {},
+        last_ts = 0,
     }
 end
 
@@ -204,6 +208,77 @@ function BoothState.set_item_attr(state, zone_id, booth_index, attr, value)
     end
     placement.attrs[attr] = value
     return true
+end
+
+-- ---------- 收益 ----------
+
+---某展区当前「每秒收益」= 该区所有已放置实例 income_per_second 之和（整数）。
+---@param state BoothState
+---@param zone_id integer
+---@return integer income_per_second
+function BoothState.zone_income_per_second(state, zone_id)
+    local sum = 0
+    local zone_placements = state.placements[zone_id]
+    if zone_placements then
+        for _, instance in pairs(zone_placements) do
+            local per_second = instance.attrs and instance.attrs.income_per_second
+            if type(per_second) == "number" then
+                sum = sum + math.tointeger(per_second)
+            end
+        end
+    end
+    return sum
+end
+
+---某展区随时间累计的总收益（整数）。
+---@param state BoothState
+---@param zone_id integer
+---@return integer income_total
+function BoothState.zone_income_total(state, zone_id)
+    return state.zone_income[zone_id] or 0
+end
+
+---把「上次结算游标 last_ts -> now」这段真实时间的收益累加进各展区总收益，并把
+---游标推进到 now。在线 tick 与离线结算共用本函数（区别仅在传入的 rate / max_seconds）：
+---  - 在线：now 与 last_ts 仅差一个 tick，elapsed≈1，rate=1.0；
+---  - 离线：玩家回归时 last_ts 是上次落盘的游标，elapsed=整段离线时长。
+---游标随 state 一起入档，保证 zone_income 与 last_ts 原子推进，天然防重复结算，
+---且不依赖退出事件。倍率在「每秒收益」小数量级上先折算再乘以秒数（整数×整数），
+---规避无上限离线时大数 × Fixed 的精度/溢出问题。
+---@param state BoothState
+---@param now integer 当前真实时间戳（GameAPI.get_timestamp()）
+---@param rate Fixed 收益倍率（在线传 1.0，离线传 BoothConfig.OFFLINE.rate）
+---@param max_seconds integer 本次结算封顶秒数；<=0 表示不封顶
+---@return integer gained 本次累加的总额
+---@return integer elapsed 实际结算的秒数
+function BoothState.accrue_to(state, now, rate, max_seconds)
+    local last = state.last_ts or 0
+    state.last_ts = now
+
+    -- 首次（无基准）只立基准、不结算。
+    if last <= 0 then
+        return 0, 0
+    end
+
+    local elapsed = GameAPI.get_timestamp_diff(now, last)
+    if type(elapsed) ~= "number" or elapsed <= 0 then
+        return 0, 0
+    end
+    if max_seconds and max_seconds > 0 and elapsed > max_seconds then
+        elapsed = max_seconds
+    end
+
+    local total = 0
+    for zone_id in pairs(state.unlocked) do
+        local per_second = BoothState.zone_income_per_second(state, zone_id)
+        local effective = math.tointeger(math.floor(per_second * rate)) or 0
+        if effective > 0 then
+            local gain = effective * elapsed
+            state.zone_income[zone_id] = (state.zone_income[zone_id] or 0) + gain
+            total = total + gain
+        end
+    end
+    return total, elapsed
 end
 
 return BoothState

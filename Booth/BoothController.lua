@@ -16,6 +16,21 @@ local BoothPersistence = require("Booth.BoothPersistence")
 
 local BoothController = {}
 
+-- 收益结算节奏 / 自动存档节奏（秒），供 GameApp 注册定时器使用。
+BoothController.INCOME_TICK_INTERVAL = BoothConfig.INCOME_TICK_INTERVAL
+BoothController.AUTOSAVE_INTERVAL = BoothConfig.AUTOSAVE_INTERVAL
+
+-- 编排的子模块（场景表现层 / 交互层 / 放置层）。这些子模块反过来 require 本控制器，
+-- 为避免加载期循环依赖拿到半初始化的模块表，这里延迟到首次使用时再 require 并缓存。
+local BoothZoneView, BoothInteraction, BoothPlacement
+
+local function submodules()
+    BoothZoneView = BoothZoneView or require("Booth.BoothZoneView")
+    BoothInteraction = BoothInteraction or require("Booth.BoothInteraction")
+    BoothPlacement = BoothPlacement or require("Booth.BoothPlacement")
+    return BoothZoneView, BoothInteraction, BoothPlacement
+end
+
 ---@type table<RoleID, BoothState>
 local state_by_role_id = {}
 
@@ -26,29 +41,53 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
----初始化入口；当前存档层无需注册引擎事件，保留签名与其它控制器一致。
+---初始化入口；存档层本身无需注册引擎事件，但作为展台系统的统一入口，
+---在此编排子模块的全局初始化（场景表现层 + 交互层）。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 function BoothController.initialize(register_trigger)
     -- 存档层暂无需注册引擎事件；保留签名与其它控制器一致。
+    local zone_view, interaction = submodules()
+    zone_view.initialize()
+    interaction.initialize(register_trigger)
 end
 
----玩家进入时读取或创建展台状态。
+---玩家进入时读取或创建展台状态，并编排子模块的角色级初始化：
+---初始隐藏交互按钮、按存档重建世界放置物、刷新所有展区场景表现。
 ---@param role Role
 function BoothController.initialize_role(role)
     local role_id = get_role_id(role)
     if not role_id then
         return
     end
-    state_by_role_id[role_id] = BoothPersistence.load(role)
+    local state = BoothPersistence.load(role)
+    state_by_role_id[role_id] = state
+
+    -- 离线收益结算放在刷新展现之前，让公告板直接显示结算后的总收益。
+    local offline_gain, offline_sec = BoothController.settle_offline(role, state)
+
+    local zone_view, interaction, placement = submodules()
+    interaction.initialize_role(role)
+    placement.spawn_saved(role)
+    zone_view.refresh_all(role)
+
+    if offline_gain > 0 and offline_sec >= (BoothConfig.OFFLINE.min_notify_seconds or 0) then
+        role.show_tips("欢迎回来，离线收益 +" .. tostring(offline_gain))
+    end
 end
 
----玩家离开时保存并移除展台状态。
+---玩家离开时编排子模块清理（销毁世界放置物、清交互记录），再保存并移除展台状态。
 ---@param role Role
 function BoothController.cleanup_role(role)
     local role_id = get_role_id(role)
     if not role_id then
         return
     end
+
+    local zone_view, interaction, placement = submodules()
+    placement.clear_role(role)
+    interaction.cleanup_role(role)
+    zone_view.clear_labels(role)
+
     local state = state_by_role_id[role_id]
     if state then
         BoothPersistence.save(role, state)
@@ -91,6 +130,52 @@ function BoothController.save_now(role)
     local state = BoothController.get_state(role)
     if state then
         BoothPersistence.save(role, state)
+    end
+end
+
+---离线收益结算：玩家回归时按「存档游标 last_ts -> 现在」的真实时长结算一笔
+---（离线倍率 + 离线封顶），并入各展区总收益。游标随存档 blob 原子推进，所以即使
+---退出事件没触发、或上次会话异常结束，也只会结算未结算过的那段时间，不会重复。
+---结算后立即落盘（把推进后的游标 + 收益写下，作为本次会话与下次离线的新基准）。
+---@param role Role
+---@param state BoothState
+---@return integer gained 离线收益总额
+---@return integer elapsed 离线秒数
+function BoothController.settle_offline(role, state)
+    if not state then
+        return 0, 0
+    end
+    local gained, elapsed = BoothState.accrue_to(state, GameAPI.get_timestamp(),
+        BoothConfig.OFFLINE.rate or 1.0, BoothConfig.OFFLINE.max_seconds or 0)
+    -- 即使本次无收益（首次登录立基准 / 无放置物）也要落盘，写下新游标基准。
+    BoothPersistence.save(role, state)
+    if gained > 0 then
+        LuaAPI.log("[BoothController] 离线收益结算 sec=" .. tostring(elapsed)
+            .. " total=" .. tostring(gained), 0)
+    end
+    return gained, elapsed
+end
+
+---在线收益结算节拍：与离线共用 accrue_to（在线倍率 1.0、不封顶），按真实时间戳差
+---把收益累加进总收益并推进游标。仅内存累加 + 刷新公告板，不每秒落盘（落盘走放置/
+---回收等操作与 GameApp 的定时自动存档；即使中途崩溃，未落盘的时间下次登录会作为
+---离线收益补回，不会丢失）。
+---@param role Role
+function BoothController.tick_income(role)
+    local state = BoothController.get_state(role)
+    if not state then
+        return
+    end
+    local gained = BoothState.accrue_to(state, GameAPI.get_timestamp(), 1.0, 0)
+    if gained <= 0 then
+        return
+    end
+
+    local zone_view = submodules()
+    for _, zone in ipairs(BoothConfig.ZONES) do
+        if BoothState.is_zone_unlocked(state, zone.id) then
+            zone_view.refresh_board(role, zone.id)
+        end
     end
 end
 

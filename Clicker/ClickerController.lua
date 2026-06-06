@@ -14,16 +14,17 @@ local ComboSystem = require("Combo.ComboSystem")
 local CurrencySystem = require("Clicker.CurrencySystem")
 local FloatText = require("Clicker.FloatTextView")
 local HeadsUpDisplay = require("Clicker.HeadsUpDisplay")
+local UINodes = require("Data.UINodes")
 local UpgradeShopPanel = require("UpgradeShop.UpgradeShopPanel")
 local UpgradeShopSystem = require("UpgradeShop.UpgradeShopSystem")
 
 local ClickerController = {}
 
----@type fun(role: Role): PlayerSession|nil
-local get_or_create_session = nil
+ClickerController.PASSIVE_INCOME_INTERVAL = ClickerConfig.PASSIVE_INCOME.tick_interval
+ClickerController.COMBO_INTERVAL = ComboConfig.TICK_INTERVAL
 
----@type fun(callback: fun(session: PlayerSession))
-local for_each_session = nil
+---@type fun(role: Role): PlayerSession|nil
+local find_session = nil
 
 local launch_button = nil
 local exit_button = nil
@@ -55,13 +56,13 @@ local function refresh_skin(session)
     end
 end
 
----@param role Role
-function ClickerController.handle_character_click(role)
-    local session = get_or_create_session(role)
+---@param session PlayerSession
+function ClickerController.handle_character_click(session)
     if not session then
         return
     end
 
+    local role = session.role
     local income = CurrencySystem.add_click_income(session.state)
     FloatText.show(role, income)
     CharacterView.play_click_feedback(role)
@@ -74,10 +75,9 @@ function ClickerController.handle_character_click(role)
     render_combo_update(session, ComboSystem.add_click(session.state))
 end
 
----@param role Role
+---@param session PlayerSession
 ---@param item_id integer
-function ClickerController.handle_shop_purchase(role, item_id)
-    local session = get_or_create_session(role)
+function ClickerController.handle_shop_purchase(session, item_id)
     if not session then
         return
     end
@@ -90,45 +90,56 @@ function ClickerController.handle_shop_purchase(role, item_id)
         )
     end
 
-    HeadsUpDisplay.render(role, session.state)
+    HeadsUpDisplay.render(session.role, session.state)
     render_shop(session)
 end
 
----@param role Role
-function ClickerController.handle_open_click_canvas(role)
-    local session = get_or_create_session(role)
+---@param session PlayerSession
+function ClickerController.handle_open_click_canvas(session)
     if not session then
         return
     end
 
+    local role = session.role
     session.click_canvas_open = true
     role.send_ui_custom_event(AppConfig.APP.events.open_click_canvas, {})
     HeadsUpDisplay.render(role, session.state)
     render_shop(session)
 end
 
----@param role Role
-function ClickerController.handle_close_click_canvas(role)
-    local session = get_or_create_session(role)
+---@param session PlayerSession
+function ClickerController.handle_close_click_canvas(session)
     if not session then
         return
     end
 
     session.click_canvas_open = false
-    role.send_ui_custom_event(AppConfig.APP.events.close_click_canvas, {})
+    session.role.send_ui_custom_event(AppConfig.APP.events.close_click_canvas, {})
 end
 
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 local function bind_ui_interactions(register_trigger)
-    CharacterView.bind_click_handler(ClickerController.handle_character_click, register_trigger)
-    UpgradeShopPanel.bind_purchase_handler(ClickerController.handle_shop_purchase, register_trigger)
+    CharacterView.bind_click_handler(function(role)
+        local session = find_session(role)
+        if session then
+            ClickerController.handle_character_click(session)
+        end
+    end, register_trigger)
+
+    UpgradeShopPanel.bind_purchase_handler(function(role, item_id)
+        local session = find_session(role)
+        if session then
+            ClickerController.handle_shop_purchase(session, item_id)
+        end
+    end, register_trigger)
 
     if launch_button then
         register_trigger(
             { EVENT.EUI_NODE_TOUCH_EVENT, launch_button, AppConfig.TOUCH.CLICK },
             function(event_name, actor, data)
-                if data and data.role then
-                    ClickerController.handle_open_click_canvas(data.role)
+                local session = data and find_session(data.role)
+                if session then
+                    ClickerController.handle_open_click_canvas(session)
                 end
             end
         )
@@ -140,8 +151,9 @@ local function bind_ui_interactions(register_trigger)
         register_trigger(
             { EVENT.EUI_NODE_TOUCH_EVENT, exit_button, AppConfig.TOUCH.CLICK },
             function(event_name, actor, data)
-                if data and data.role then
-                    ClickerController.handle_close_click_canvas(data.role)
+                local session = data and find_session(data.role)
+                if session then
+                    ClickerController.handle_close_click_canvas(session)
                 end
             end
         )
@@ -150,51 +162,42 @@ local function bind_ui_interactions(register_trigger)
     end
 end
 
----@param register_trigger fun(event_arguments: table, callback: function): integer
-local function register_timers(register_trigger)
-    register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerConfig.PASSIVE_INCOME.tick_interval) },
-        function()
-            for_each_session(function(session)
-                CurrencySystem.add_passive_income(session.state)
-                HeadsUpDisplay.render(session.role, session.state)
-                refresh_skin(session)
-                if session.click_canvas_open then
-                    render_shop(session)
-                end
-            end)
-        end
-    )
-
-    register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ComboConfig.TICK_INTERVAL) },
-        function()
-            for_each_session(function(session)
-                render_combo_update(session, ComboSystem.decay(session.state))
-            end)
-        end
-    )
+---@param session PlayerSession
+function ClickerController.tick_passive_income(session)
+    CurrencySystem.add_passive_income(session.state)
+    HeadsUpDisplay.render(session.role, session.state)
+    refresh_skin(session)
+    if session.click_canvas_open then
+        render_shop(session)
+    end
 end
 
----@param canvas ECanvas
----@param buttons table
----@param register_trigger fun(event_arguments: table, callback: function): integer
----@param session_getter fun(role: Role): PlayerSession|nil
----@param session_iterator fun(callback: fun(session: PlayerSession))
-function ClickerController.initialize(canvas, buttons, register_trigger, session_getter, session_iterator)
-    launch_button = buttons.launch
-    exit_button = buttons.exit
-    get_or_create_session = session_getter
-    for_each_session = session_iterator
+---@param session PlayerSession
+function ClickerController.tick_combo_decay(session)
+    render_combo_update(session, ComboSystem.decay(session.state))
+end
 
-    CharacterView.initialize(canvas)
-    HeadsUpDisplay.initialize(canvas)
-    FloatText.initialize(canvas)
-    UpgradeShopPanel.initialize(canvas)
-    ComboBar.initialize(canvas)
+---@param register_trigger fun(event_arguments: table, callback: function): integer
+---@param session_finder fun(role: Role): PlayerSession|nil
+function ClickerController.initialize(register_trigger, session_finder)
+    local world_canvas = UINodes[AppConfig.APP.canvases.world]
+    local click_canvas = UINodes[AppConfig.APP.canvases.click]
+    if not click_canvas then
+        LuaAPI.log("[ClickerController] 缺少画布: " .. AppConfig.APP.canvases.click, 1)
+        return
+    end
+
+    launch_button = GameAPI.get_eui_child_by_name(world_canvas, AppConfig.APP.buttons.launch)
+    exit_button = GameAPI.get_eui_child_by_name(click_canvas, AppConfig.APP.buttons.exit)
+    find_session = session_finder
+
+    CharacterView.initialize(click_canvas)
+    HeadsUpDisplay.initialize(click_canvas)
+    FloatText.initialize(click_canvas)
+    UpgradeShopPanel.initialize(click_canvas)
+    ComboBar.initialize(click_canvas)
 
     bind_ui_interactions(register_trigger)
-    register_timers(register_trigger)
 end
 
 ---@param state PlayerGameState
@@ -230,8 +233,7 @@ function ClickerController.shutdown()
     CharacterView.shutdown()
     ComboBar.shutdown()
     FloatText.shutdown()
-    get_or_create_session = nil
-    for_each_session = nil
+    find_session = nil
     launch_button = nil
     exit_button = nil
 end

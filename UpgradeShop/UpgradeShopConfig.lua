@@ -10,7 +10,7 @@ UpgradeShop/UpgradeShopConfig.lua
 ---@field locked_name string
 ---@field description string
 ---@field locked_description string
----@field effect_type string "click" | "passive"
+---@field effect_type string "click" | "passive" --缺少字面量类型
 ---@field effect_value integer
 ---@field base_price integer
 ---@field price_growth_percent integer

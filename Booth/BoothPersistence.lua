@@ -12,7 +12,8 @@ Booth/BoothPersistence.lua
     "zones": [1, 2],
     "placements": {
       "<zone>": { "<booth>": { "item_id": id, "attrs": {..} } }
-    }
+    },
+    "zone_income": { "<zone>": total }
   }
 
 对象键统一转成字符串，避免编码器把整数键表误判成数组；只有 zones 是 JSON 数组。
@@ -117,9 +118,16 @@ function BoothPersistence.to_json(state)
         placements[tostring(zone_id)] = zone_out
     end
 
+    local zone_income = {}
+    for zone_id, total in pairs(state.zone_income or {}) do
+        zone_income[tostring(zone_id)] = to_int(total)
+    end
+
     return Json.encode({
         zones = zones,
         placements = placements,
+        zone_income = zone_income,
+        last_ts = to_int(state.last_ts or 0),
     })
 end
 
@@ -135,7 +143,7 @@ function BoothPersistence.from_json(str)
         return BoothState.new()
     end
 
-    local state = { unlocked = {}, placements = {} }
+    local state = { unlocked = {}, placements = {}, zone_income = {}, last_ts = to_int(data.last_ts) }
 
     -- 已解锁展区：只保留当前配置里仍存在的 id。
     if type(data.zones) == "table" then
@@ -168,6 +176,16 @@ function BoothPersistence.from_json(str)
                         BoothState.place_item(state, zone_id, booth_index, item_id, attrs)
                     end
                 end
+            end
+        end
+    end
+
+    -- 累计总收益：只保留当前配置里仍存在的展区，值转整数。
+    if type(data.zone_income) == "table" then
+        for zone_key, total in pairs(data.zone_income) do
+            local zone_id = key_to_int(zone_key)
+            if BoothConfig.find_zone(zone_id) then
+                state.zone_income[zone_id] = to_int(total)
             end
         end
     end

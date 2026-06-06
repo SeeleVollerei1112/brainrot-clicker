@@ -105,7 +105,7 @@ local function play_pop_animation(role)
 end
 
 ---绑定编辑器内已搭好的连击节点。
----@param canvas ECanvas
+---@param canvas ENode
 function ComboBar.initialize(canvas)
     lifecycle_generation = lifecycle_generation + 1
     animation_generations_by_role_id = {}

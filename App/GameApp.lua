@@ -5,17 +5,12 @@ App/GameApp.lua
 这里直接持有玩家会话表和触发器编号，避免为了简单表操作再包一层模块。
 ]]
 
-local AppConfig = require("App.AppConfig")
 local BoothController = require("Booth.BoothController")
-local BoothInteraction = require("Booth.BoothInteraction")
-local BoothPlacement = require("Booth.BoothPlacement")
-local BoothZoneView = require("Booth.BoothZoneView")
 local ClickerController = require("Clicker.ClickerController")
 local InventoryController = require("Inventory.InventoryController")
 local LotteryController = require("Lottery.LotteryController")
 local MallController = require("Mall.MallController")
 local PlayerState = require("Clicker.PlayerState")
-local UINodes = require("Data.UINodes")
 
 ---@class PlayerSession
 ---@field role_id RoleID 玩家 ID
@@ -28,14 +23,18 @@ local GameApp = {}
 ---@type table<RoleID, PlayerSession>
 local player_sessions = {}
 
+---@param role Role
+---@return PlayerSession|nil
+local function find_session(role)
+    local control_unit = role and role.get_ctrl_unit()
+    local role_id = control_unit and control_unit.get_role_id()
+    return role_id and player_sessions[role_id] or nil
+end
+
 ---@type integer[]
 local trigger_ids = {}
 
 local initialized = false
-local world_canvas = nil
-local click_canvas = nil
-local launch_button = nil
-local exit_button = nil
 
 ---@param event_arguments table
 ---@param callback function
@@ -60,16 +59,6 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
----@param parent ENode|nil
----@param name string
----@return ENode|nil node
-local function child(parent, name)
-    if not parent then
-        return nil
-    end
-    return GameAPI.get_eui_child_by_name(parent, name)
-end
-
 ---@param callback fun(session: PlayerSession)
 local function for_each_session(callback)
     for _, session in pairs(player_sessions) do
@@ -78,7 +67,7 @@ local function for_each_session(callback)
 end
 
 ---@param session PlayerSession
-local function initialize_session_features(session)
+local function setup_player(session)
     local role = session.role
 
     ClickerController.initialize_role(session)
@@ -86,9 +75,6 @@ local function initialize_session_features(session)
     InventoryController.initialize_role(role)
     LotteryController.initialize_role(role)
     BoothController.initialize_role(role)
-    BoothInteraction.initialize_role(role)
-    BoothPlacement.spawn_saved(role)
-    BoothZoneView.refresh_all(role)
 end
 
 ---@param role Role
@@ -125,7 +111,7 @@ function GameApp.get_or_create_player_session(role)
     }
 
     player_sessions[role_id] = session
-    initialize_session_features(session)
+    setup_player(session)
     register_role_exit_handler(role)
     LuaAPI.log("[GameApp] 玩家会话已创建: " .. tostring(role_id), 0)
     return session
@@ -141,44 +127,49 @@ function GameApp.remove_player_session(role)
     player_sessions[role_id] = nil
     ClickerController.cleanup_role(role)
     LotteryController.cleanup_role(role)
-    BoothPlacement.clear_role(role)
-    BoothInteraction.cleanup_role(role)
     BoothController.cleanup_role(role)
     LuaAPI.log("[GameApp] 玩家会话已移除: " .. tostring(role_id), 0)
 end
 
----@return boolean
-local function resolve_app_nodes()
-    world_canvas = UINodes[AppConfig.APP.canvases.world]
-    click_canvas = UINodes[AppConfig.APP.canvases.click]
-    if not click_canvas then
-        LuaAPI.log("[GameApp] 缺少画布: " .. AppConfig.APP.canvases.click, 1)
-        return false
-    end
+local function setup_controllers()
+    ClickerController.initialize(register_trigger, find_session)
 
-    launch_button = child(world_canvas, AppConfig.APP.buttons.launch)
-    exit_button = child(click_canvas, AppConfig.APP.buttons.exit)
-    return true
-end
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.PASSIVE_INCOME_INTERVAL) },
+        function()
+            for_each_session(ClickerController.tick_passive_income)
+        end
+    )
 
-local function initialize_features()
-    ClickerController.initialize(
-        click_canvas,
-        {
-            launch = launch_button,
-            exit = exit_button,
-        },
-        register_trigger,
-        GameApp.get_or_create_player_session,
-        for_each_session
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.COMBO_INTERVAL) },
+        function()
+            for_each_session(ClickerController.tick_combo_decay)
+        end
     )
 
     LotteryController.initialize(register_trigger)
     MallController.initialize(register_trigger)
     InventoryController.initialize(register_trigger)
     BoothController.initialize(register_trigger)
-    BoothZoneView.initialize()
-    BoothInteraction.initialize(register_trigger)
+
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.INCOME_TICK_INTERVAL) },
+        function()
+            for_each_session(function(session)
+                BoothController.tick_income(session.role)
+            end)
+        end
+    )
+
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.AUTOSAVE_INTERVAL) },
+        function()
+            for_each_session(function(session)
+                BoothController.save_now(session.role)
+            end)
+        end
+    )
 end
 
 function GameApp.initialize()
@@ -186,11 +177,7 @@ function GameApp.initialize()
         GameApp.shutdown()
     end
 
-    if not resolve_app_nodes() then
-        return
-    end
-
-    initialize_features()
+    setup_controllers()
     initialized = true
 
     for _, role in ipairs(GameAPI.get_all_valid_roles()) do

@@ -47,11 +47,68 @@ local BoothConfig = {
     -- 放置物品时相对触发区域中心的高度偏移（让物品落在展台台面上，按需微调）。
     PLACEMENT_Y_OFFSET = 0.0,
 
+    -- 展台收益累计的结算节奏（秒）。每个节拍按真实时间戳差把收益累加进总收益。
+    INCOME_TICK_INTERVAL = 1.0,
+
+    -- 展台状态定时自动存档（秒）。退出事件在本环境不一定触发，故定时落盘收益游标，
+    -- 让在线累计的总收益与 last_ts 保持持久（崩溃/异常退出时也只丢失最多一个间隔）。
+    AUTOSAVE_INTERVAL = 60.0,
+
+    -- 离线收益：收益统一按「真实时间戳差」累计——在线 tick 与离线结算是同一套逻辑，
+    -- 游标 last_ts 存进存档 blob（与 zone_income 原子落盘），因此不依赖退出事件、
+    -- 也不会重复结算。回归时第一笔结算即为离线收益，弹窗提示并入各展区总收益
+    -- （沿用纯展示、不进货币）。
+    OFFLINE = {
+        -- 离线收益倍率（相对在线速率）。1.0 = 全额；0.5 = 半额；按需调整。
+        rate = 1.0,
+        -- 离线结算的封顶秒数；0 = 无上限（按真实离线时长全额结算）。
+        -- 如需封顶改成秒数，例如 8 小时 = 28800。
+        max_seconds = 0,
+        -- 离线时长达到该秒数才弹「欢迎回来」提示，避免短暂重连刷屏。
+        min_notify_seconds = 60,
+    },
+
     -- 进入展台后显示的交互按钮节点名（由编辑器导出到 Data/UINodes.lua 后即被引用；
     -- 若尚未导出，运行时会安全跳过并打日志）。
     UI = {
         place_button = "展台放置按钮",
         recycle_button = "展台回收按钮",
+    },
+
+    -- 展台「头顶」3D 文字界面：放置物品后在展示台上方绑定一个场景界面(E3DLayer)，
+    -- 显示该实例的等级与每秒收益。对应编辑器导出的预设/节点：
+    --   layer_name  -> Data/Prefab.lua 的 scene_eui 表键（场景界面预设）
+    --   level_node / income_node -> Data/UINodes.lua 的文本节点键
+    --   background_nodes -> 需要透明化的背景图片节点键（按需在编辑器导出后填入）
+    -- 预设未导出时，运行时会安全跳过头顶文字并打日志（其余展台逻辑不受影响）。
+    HEAD_UI = {
+        layer_name = "展台头顶界面",
+        level_node = "展台头顶等级",
+        income_node = "展台头顶收益",
+        background_nodes = {},
+        -- 绑定到展示台「底面中心点」，再沿 Y 轴上移到模型头顶（按模型高度微调）。
+        socket = "socket_origin",
+        offset = { x = 0.0, y = 6.0, z = 0.0 },
+        style = {
+            level_color = 0xFFD14D2B,
+            income_color = 0xFF2BAFD1,
+            outline_color = 0xFF000000,
+            outline_width = 2,
+            level_font_size = 65,
+            income_font_size = 50,
+            label_background_opacity = 0.0,
+            background_opacity = 0.0,
+            background_visible = false,
+            level_prefix = "Lv.",
+            income_prefix = "+",
+            income_suffix = "/s",
+        },
+    },
+
+    -- 展台回收目标槽位。默认回到「装备栏」而不是储物栏(BACKPACK)。
+    -- 若编辑器枚举名不同，调整 slot_type_names 的顺序即可；都不可用时才回退 BACKPACK 并打日志。
+    RECYCLE = {
+        slot_type_names = { "EQUIPPED" },
     },
 
     ---@type BoothZoneConfig[]

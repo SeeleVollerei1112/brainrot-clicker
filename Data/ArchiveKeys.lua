@@ -4,6 +4,6 @@
 -- ============================================================
 
 return {
-    -- 展台状态序列化
+    -- 展台状态序列化（含收益累计游标 last_ts，见 Booth/BoothState.lua）
     BOOTH_BLOB = { id = 1001, type = Enums.ArchiveType.Str },
 }

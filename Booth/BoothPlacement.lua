@@ -2,12 +2,12 @@
 Booth/BoothPlacement.lua
 
 展台「放置 / 回收」世界逻辑层：把背包里的物品放到展台位（在场景中创建
-物品到该展台触发区域的位置），或从展台位回收到背包。状态变更与存档统一
+物品到该展台触发区域的位置），或从展台位回收到装备栏。状态变更与存档统一
 走 BoothController（复用其 place_item / remove_item，二者自动存档）。
 
 红线（用户约定）：不使用 drop（丢弃）功能，放置一律用
   GameAPI.create_equipment(prefab, pos) 把物品创建到指定区域；
-  回收用 character.create_equipment_to_slot(prefab, BACKPACK) 回到背包。
+  回收用 character.create_equipment_to_slot(prefab, RECYCLE_SLOT) 回到配置槽位。
 
 运行时句柄（world_equipment）只在内存维护、不入档：会话开始时按存档里的
 placements 重新 spawn（spawn_saved）。展台位的世界坐标按触发区域名反查
@@ -27,6 +27,8 @@ local world_equipment = {}
 
 -- 展台位世界坐标缓存：booth_pos["zone|booth"] = Vector3
 local booth_pos = {}
+
+local recycle_slot_missing_logged = false
 
 ---@param role Role
 ---@return RoleID|nil
@@ -95,6 +97,22 @@ local function destroy_equipment(equipment)
     if equipment then
         equipment.destroy_equipment()
     end
+end
+
+---@return any slot_type
+local function get_recycle_slot_type()
+    for _, slot_name in ipairs(BoothConfig.RECYCLE.slot_type_names or {}) do
+        local slot_type = Enums.EquipmentSlotType[slot_name]
+        if slot_type ~= nil then
+            return slot_type
+        end
+    end
+
+    if not recycle_slot_missing_logged then
+        recycle_slot_missing_logged = true
+        LuaAPI.log("[BoothPlacement] 找不到装备栏槽位枚举，回收暂回退到 BACKPACK；请检查 BoothConfig.RECYCLE", 1)
+    end
+    return BACKPACK
 end
 
 ---从玩家背包里挑一件「可放置」的物品（优先当前选中格）。
@@ -191,7 +209,7 @@ function BoothPlacement.place(role, zone_id, booth_index)
     return true, "ok"
 end
 
----把展台位上的物品回收回背包。
+---把展台位上的物品回收到配置槽位，默认装备栏。
 ---@param role Role
 ---@param zone_id integer
 ---@param booth_index integer
@@ -210,9 +228,9 @@ function BoothPlacement.recycle(role, zone_id, booth_index)
     local item = BoothConfig.find_item(placement.item_id)
     local prefab_id = item and item.prefab_id
 
-    -- 1) 回到背包。
+    -- 1) 回到装备栏（槽位名在 BoothConfig.RECYCLE 配置；失败时回退储物栏并打日志）。
     if prefab_id then
-        character.create_equipment_to_slot(prefab_id, BACKPACK)
+        character.create_equipment_to_slot(prefab_id, get_recycle_slot_type())
     else
         LuaAPI.log("[BoothPlacement] 回收物品缺少 prefab_id, 仅清状态 item="
             .. tostring(placement.item_id), 1)
