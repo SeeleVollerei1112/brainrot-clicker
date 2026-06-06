@@ -62,13 +62,19 @@ end
 ---玩家会话创建时调用：强制隐藏商城画布并做一次性设置。
 ---修复“开局直接弹出商城”——商城画布在地图中默认 visible，需开局主动隐藏
 ---（编辑器 visible=false 仅在保存后生效，故用代码兜底）。
----@param role Role
-function MallController.initialize_role(role)
+---@param session PlayerSession
+function MallController.setup_session(session)
+    local role = session and session.role
     if not role then
         return
     end
     role.send_ui_custom_event(AppConfig.APP.events.close_mall, {})
     MallView.initialize_role(role)
+end
+
+---@param role Role
+function MallController.initialize_role(role)
+    MallController.setup_session({ role = role })
 end
 
 ---绑定商城所有交互。GAME_INIT 时由 GameApp 调用。

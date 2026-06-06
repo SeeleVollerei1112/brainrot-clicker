@@ -69,3 +69,23 @@ function SetRoleGameResult(role_id, result)
 		role.lose()
 	end
 end
+
+---@export_plugin
+---@style button
+---@desc 解锁展台区域
+---@param role_id RoleID 玩家ID
+---@param zone_id integer 展区ID
+function UnlockBoothZone(role_id, zone_id)
+	local role = GameAPI.get_role(role_id)
+	if not role then
+		return
+	end
+
+	local BoothController = require("Booth.BoothController")
+	local success = BoothController.unlock_zone(role, zone_id)
+	if success then
+		role.show_tips("展区已解锁: " .. tostring(zone_id))
+	else
+		role.show_tips("展区解锁失败: " .. tostring(zone_id))
+	end
+end

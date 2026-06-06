@@ -13,7 +13,8 @@ Booth/BoothPersistence.lua
     "placements": {
       "<zone>": { "<booth>": { "item_id": id, "attrs": {..} } }
     },
-    "zone_income": { "<zone>": total }
+    "zone_income": { "<zone>": total },
+    "booth_income": { "<zone>": { "<booth>": total } }
   }
 
 对象键统一转成字符串，避免编码器把整数键表误判成数组；只有 zones 是 JSON 数组。
@@ -123,10 +124,20 @@ function BoothPersistence.to_json(state)
         zone_income[tostring(zone_id)] = to_int(total)
     end
 
+    local booth_income = {}
+    for zone_id, zone_booth_income in pairs(state.booth_income or {}) do
+        local zone_out = {}
+        for booth_index, total in pairs(zone_booth_income) do
+            zone_out[tostring(booth_index)] = to_int(total)
+        end
+        booth_income[tostring(zone_id)] = zone_out
+    end
+
     return Json.encode({
         zones = zones,
         placements = placements,
         zone_income = zone_income,
+        booth_income = booth_income,
         last_ts = to_int(state.last_ts or 0),
     })
 end
@@ -143,7 +154,13 @@ function BoothPersistence.from_json(str)
         return BoothState.new()
     end
 
-    local state = { unlocked = {}, placements = {}, zone_income = {}, last_ts = to_int(data.last_ts) }
+    local state = {
+        unlocked = {},
+        placements = {},
+        zone_income = {},
+        booth_income = {},
+        last_ts = to_int(data.last_ts),
+    }
 
     -- 已解锁展区：只保留当前配置里仍存在的 id。
     if type(data.zones) == "table" then
@@ -154,7 +171,7 @@ function BoothPersistence.from_json(str)
             end
         end
     end
-    -- 默认展区始终解锁，即使旧存档里漏了它。
+    -- 默认展区始终解锁
     state.unlocked[BoothConfig.DEFAULT_UNLOCKED_ZONE_ID] = true
 
     -- 放置物：校验展区已解锁、展台位合法、物品已配置。
@@ -186,6 +203,24 @@ function BoothPersistence.from_json(str)
             local zone_id = key_to_int(zone_key)
             if BoothConfig.find_zone(zone_id) then
                 state.zone_income[zone_id] = to_int(total)
+            end
+        end
+    end
+
+    -- 单展台累计收益：只保留仍有放置物的展台位，避免新放置物继承旧实例累计。
+    if type(data.booth_income) == "table" then
+        for zone_key, zone_booth_income in pairs(data.booth_income) do
+            local zone_id = key_to_int(zone_key)
+            local zone_placements = state.placements[zone_id]
+            if zone_placements and type(zone_booth_income) == "table" then
+                local zone_out = {}
+                for booth_key, total in pairs(zone_booth_income) do
+                    local booth_index = key_to_int(booth_key)
+                    if zone_placements[booth_index] then
+                        zone_out[booth_index] = to_int(total)
+                    end
+                end
+                state.booth_income[zone_id] = zone_out
             end
         end
     end

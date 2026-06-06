@@ -16,12 +16,18 @@ local function handle_select(role, tab_key)
 end
 
 ---玩家会话创建时调用：关闭标签文字触摸并应用默认选中。
----@param role Role
-function InventoryController.initialize_role(role)
+---@param session PlayerSession
+function InventoryController.setup_session(session)
+    local role = session and session.role
     if not role then
         return
     end
     InventoryView.initialize_role(role)
+end
+
+---@param role Role
+function InventoryController.initialize_role(role)
+    InventoryController.setup_session({ role = role })
 end
 
 ---绑定背包侧边栏所有交互。GAME_INIT 时由 GameApp 调用。

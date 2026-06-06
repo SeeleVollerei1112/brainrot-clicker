@@ -2,15 +2,12 @@
 App/GameApp.lua
 
 应用生命周期与功能装配入口。
-这里直接持有玩家会话表和触发器编号，避免为了简单表操作再包一层模块。
+负责应用生命周期、玩家会话创建入口，并协调注册表清理。
 ]]
 
-local BoothController = require("Booth.BoothController")
-local ClickerController = require("Clicker.ClickerController")
-local InventoryController = require("Inventory.InventoryController")
-local LotteryController = require("Lottery.LotteryController")
-local MallController = require("Mall.MallController")
-local PlayerState = require("Clicker.PlayerState")
+local ControllerRegistry = require("App.ControllerRegistry")
+local PlayerSessionRegistry = require("App.PlayerSessionRegistry")
+local TriggerRegistry = require("App.TriggerRegistry")
 
 ---@class PlayerSession
 ---@field role_id RoleID 玩家 ID
@@ -20,66 +17,15 @@ local PlayerState = require("Clicker.PlayerState")
 
 local GameApp = {}
 
----@type table<RoleID, PlayerSession>
-local player_sessions = {}
-
----@param role Role
----@return PlayerSession|nil
-local function find_session(role)
-    local control_unit = role and role.get_ctrl_unit()
-    local role_id = control_unit and control_unit.get_role_id()
-    return role_id and player_sessions[role_id] or nil
-end
-
----@type integer[]
-local trigger_ids = {}
-
 local initialized = false
 
----@param event_arguments table
----@param callback function
----@return integer trigger_id
-local function register_trigger(event_arguments, callback)
-    local trigger_id = LuaAPI.global_register_trigger_event(event_arguments, callback)
-    trigger_ids[#trigger_ids + 1] = trigger_id
-    return trigger_id
-end
-
-local function clear_triggers()
-    for index = #trigger_ids, 1, -1 do
-        LuaAPI.global_unregister_trigger_event(trigger_ids[index])
-    end
-    trigger_ids = {}
-end
-
----@param role Role
----@return RoleID|nil role_id
-local function get_role_id(role)
-    local control_unit = role and role.get_ctrl_unit()
-    return control_unit and control_unit.get_role_id() or nil
-end
-
----@param callback fun(session: PlayerSession)
-local function for_each_session(callback)
-    for _, session in pairs(player_sessions) do
-        callback(session)
-    end
-end
-
----@param session PlayerSession
-local function setup_player(session)
-    local role = session.role
-
-    ClickerController.initialize_role(session)
-    MallController.initialize_role(role)
-    InventoryController.initialize_role(role)
-    LotteryController.initialize_role(role)
-    BoothController.initialize_role(role)
-end
+---@class Application
+---@field register_trigger fun(event_arguments: table, callback: function): integer
+---@field sessions table
 
 ---@param role Role
 local function register_role_exit_handler(role)
-    register_trigger(
+    TriggerRegistry.register(
         { EVENT.SPEC_ROLE_EXIT_GAME, role },
         function(event_name, actor, data)
             GameApp.remove_player_session((data and data.role) or role)
@@ -90,19 +36,18 @@ end
 ---@param role Role
 ---@return PlayerSession|nil session
 function GameApp.get_or_create_player_session(role)
-    local role_id = get_role_id(role)
+    local role_id = PlayerSessionRegistry.get_role_id(role)
     if not role_id then
         LuaAPI.log("[GameApp] 无法获取 Role ID，跳过玩家会话创建", 1)
         return nil
     end
 
-    local session = player_sessions[role_id]
+    local session = PlayerSessionRegistry.find_by_role_id(role_id)
     if session then
         return session
     end
 
-    local state = PlayerState.new()
-    ClickerController.initialize_state(state)
+    local state = ControllerRegistry.create_player_state()
     session = {
         role_id = role_id,
         role = role,
@@ -110,8 +55,8 @@ function GameApp.get_or_create_player_session(role)
         click_canvas_open = false,
     }
 
-    player_sessions[role_id] = session
-    setup_player(session)
+    PlayerSessionRegistry.set(session)
+    ControllerRegistry.setup_session(session)
     register_role_exit_handler(role)
     LuaAPI.log("[GameApp] 玩家会话已创建: " .. tostring(role_id), 0)
     return session
@@ -119,57 +64,13 @@ end
 
 ---@param role Role
 function GameApp.remove_player_session(role)
-    local role_id = get_role_id(role)
-    if not role_id then
+    local session = PlayerSessionRegistry.remove_by_role(role)
+    if not session then
         return
     end
 
-    player_sessions[role_id] = nil
-    ClickerController.cleanup_role(role)
-    LotteryController.cleanup_role(role)
-    BoothController.cleanup_role(role)
-    LuaAPI.log("[GameApp] 玩家会话已移除: " .. tostring(role_id), 0)
-end
-
-local function setup_controllers()
-    ClickerController.initialize(register_trigger, find_session)
-
-    register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.PASSIVE_INCOME_INTERVAL) },
-        function()
-            for_each_session(ClickerController.tick_passive_income)
-        end
-    )
-
-    register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.COMBO_INTERVAL) },
-        function()
-            for_each_session(ClickerController.tick_combo_decay)
-        end
-    )
-
-    LotteryController.initialize(register_trigger)
-    MallController.initialize(register_trigger)
-    InventoryController.initialize(register_trigger)
-    BoothController.initialize(register_trigger)
-
-    register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.INCOME_TICK_INTERVAL) },
-        function()
-            for_each_session(function(session)
-                BoothController.tick_income(session.role)
-            end)
-        end
-    )
-
-    register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.AUTOSAVE_INTERVAL) },
-        function()
-            for_each_session(function(session)
-                BoothController.save_now(session.role)
-            end)
-        end
-    )
+    ControllerRegistry.cleanup_session(session)
+    LuaAPI.log("[GameApp] 玩家会话已移除: " .. tostring(session.role_id), 0)
 end
 
 function GameApp.initialize()
@@ -177,7 +78,12 @@ function GameApp.initialize()
         GameApp.shutdown()
     end
 
-    setup_controllers()
+    local application = {
+        register_trigger = TriggerRegistry.register,
+        sessions = PlayerSessionRegistry,
+    }
+
+    ControllerRegistry.initialize_all(application)
     initialized = true
 
     for _, role in ipairs(GameAPI.get_all_valid_roles()) do
@@ -188,10 +94,10 @@ function GameApp.initialize()
 end
 
 function GameApp.shutdown()
-    clear_triggers()
-    player_sessions = {}
+    TriggerRegistry.clear()
+    PlayerSessionRegistry.clear()
     initialized = false
-    ClickerController.shutdown()
+    ControllerRegistry.shutdown_all()
     LuaAPI.log("[GameApp] Brainrot Clicker 已关闭", 0)
 end
 

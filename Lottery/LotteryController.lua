@@ -112,15 +112,33 @@ function LotteryController.initialize(register_trigger)
 end
 
 ---为加入的玩家初始化转盘视图（隐藏选中框、重置该玩家转动状态）。
----@param role Role
-function LotteryController.initialize_role(role)
+---@param session PlayerSession
+function LotteryController.setup_session(session)
+    local role = session and session.role
+    if not role then
+        return
+    end
     LotteryView.initialize_role(role)
 end
 
+---@param role Role
+function LotteryController.initialize_role(role)
+    LotteryController.setup_session({ role = role })
+end
+
 ---玩家离开时清理其转盘视图状态。
+---@param session PlayerSession
+function LotteryController.cleanup_session(session)
+    local role = session and session.role
+    if not role then
+        return
+    end
+    LotteryView.cleanup_role(role)
+end
+
 ---@param role Role
 function LotteryController.cleanup_role(role)
-    LotteryView.cleanup_role(role)
+    LotteryController.cleanup_session({ role = role })
 end
 
 return LotteryController

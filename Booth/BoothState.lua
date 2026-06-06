@@ -6,6 +6,7 @@ Booth/BoothState.lua
 状态结构（详见下方 ---@class）：
   unlocked[zone_id]                = true                  已解锁区（只存标记）
   placements[zone_id][booth_index] = { item_id, attrs }    放置的物品实例
+  booth_income[zone_id][booth]     = total                 单个展台位累计收益
 
 这些函数不持有全局玩家状态；存档和序列化放在 Booth/BoothPersistence.lua。
 ]]
@@ -22,6 +23,7 @@ local BoothConfig = require("Booth.BoothConfig")
 ---@field unlocked table<integer, boolean>
 ---@field placements table<integer, table<integer, BoothItemInstance>>
 ---@field zone_income table<integer, integer>  各展区随时间累计的总收益（整数，入档）
+---@field booth_income table<integer, table<integer, integer>>  各展台位随时间累计的总收益（整数，入档）
 ---@field last_ts integer  收益已结算到的真实时间戳（游标，入档；0=尚无基准）
 
 local BoothState = {}
@@ -46,6 +48,7 @@ function BoothState.new()
         unlocked = { [BoothConfig.DEFAULT_UNLOCKED_ZONE_ID] = true },
         placements = {},
         zone_income = {},
+        booth_income = {},
         last_ts = 0,
     }
 end
@@ -149,6 +152,8 @@ end
 ---@param attrs table<string, BoothAttrValue>|nil
 ---@return boolean success
 function BoothState.place_item(state, zone_id, booth_index, item_id, attrs)
+    state.booth_income = state.booth_income or {}
+
     if not BoothState.is_zone_unlocked(state, zone_id) then
         return false
     end
@@ -177,6 +182,13 @@ function BoothState.place_item(state, zone_id, booth_index, item_id, attrs)
         item_id = item_id,
         attrs = instance_attrs,
     }
+
+    local zone_booth_income = state.booth_income[zone_id]
+    if not zone_booth_income then
+        zone_booth_income = {}
+        state.booth_income[zone_id] = zone_booth_income
+    end
+    zone_booth_income[booth_index] = 0
     return true
 end
 
@@ -186,11 +198,17 @@ end
 ---@param booth_index integer
 ---@return boolean removed
 function BoothState.remove_item(state, zone_id, booth_index)
+    state.booth_income = state.booth_income or {}
+
     local zone_placements = state.placements[zone_id]
     if not zone_placements or not zone_placements[booth_index] then
         return false
     end
     zone_placements[booth_index] = nil
+    local zone_booth_income = state.booth_income[zone_id]
+    if zone_booth_income then
+        zone_booth_income[booth_index] = nil
+    end
     return true
 end
 
@@ -230,12 +248,37 @@ function BoothState.zone_income_per_second(state, zone_id)
     return sum
 end
 
+---某展台位当前「每秒收益」。
+---@param state BoothState
+---@param zone_id integer
+---@param booth_index integer
+---@return integer income_per_second
+function BoothState.booth_income_per_second(state, zone_id, booth_index)
+    local placement = BoothState.get_placement(state, zone_id, booth_index)
+    local per_second = placement and placement.attrs and placement.attrs.income_per_second
+    if type(per_second) ~= "number" then
+        return 0
+    end
+    return math.tointeger(per_second) or 0
+end
+
 ---某展区随时间累计的总收益（整数）。
 ---@param state BoothState
 ---@param zone_id integer
 ---@return integer income_total
 function BoothState.zone_income_total(state, zone_id)
     return state.zone_income[zone_id] or 0
+end
+
+---某展台位随时间累计的总收益（整数）。
+---@param state BoothState
+---@param zone_id integer
+---@param booth_index integer
+---@return integer income_total
+function BoothState.booth_income_total(state, zone_id, booth_index)
+    state.booth_income = state.booth_income or {}
+    local zone_booth_income = state.booth_income[zone_id]
+    return zone_booth_income and zone_booth_income[booth_index] or 0
 end
 
 ---把「上次结算游标 last_ts -> now」这段真实时间的收益累加进各展区总收益，并把
@@ -252,6 +295,9 @@ end
 ---@return integer gained 本次累加的总额
 ---@return integer elapsed 实际结算的秒数
 function BoothState.accrue_to(state, now, rate, max_seconds)
+    state.zone_income = state.zone_income or {}
+    state.booth_income = state.booth_income or {}
+
     local last = state.last_ts or 0
     state.last_ts = now
 
@@ -270,12 +316,26 @@ function BoothState.accrue_to(state, now, rate, max_seconds)
 
     local total = 0
     for zone_id in pairs(state.unlocked) do
-        local per_second = BoothState.zone_income_per_second(state, zone_id)
-        local effective = math.tointeger(math.floor(per_second * rate)) or 0
-        if effective > 0 then
-            local gain = effective * elapsed
-            state.zone_income[zone_id] = (state.zone_income[zone_id] or 0) + gain
-            total = total + gain
+        local zone_placements = state.placements[zone_id]
+        if zone_placements then
+            local zone_booth_income = state.booth_income[zone_id]
+            if not zone_booth_income then
+                zone_booth_income = {}
+                state.booth_income[zone_id] = zone_booth_income
+            end
+
+            for booth_index, instance in pairs(zone_placements) do
+                local per_second = instance.attrs and instance.attrs.income_per_second
+                if type(per_second) == "number" then
+                    local effective = math.tointeger(math.floor(per_second * rate)) or 0
+                    if effective > 0 then
+                        local gain = effective * elapsed
+                        zone_booth_income[booth_index] = (zone_booth_income[booth_index] or 0) + gain
+                        state.zone_income[zone_id] = (state.zone_income[zone_id] or 0) + gain
+                        total = total + gain
+                    end
+                end
+            end
         end
     end
     return total, elapsed

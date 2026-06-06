@@ -5,7 +5,7 @@ Booth/BoothZoneView.lua
 锁定展区隐藏展台模型并关闭物理；解锁展区显示展台模型并恢复碰撞。
 公告板展示当前展区状态（每秒总收益 + 随时间累计的总收益）。
 每个已放置展台在展示台上方绑定一个 3D 场景界面(E3DLayer)，显示该实例的
-等级与每秒收益。展台和公告板都是编辑器中已摆放的场景单位，运行时按
+等级、每秒收益与累计收益。展台和公告板都是编辑器中已摆放的场景单位，运行时按
 BoothConfig 的命名规则通过 LuaAPI.query_unit 查询并缓存。
 
 头顶 3D 文字依赖编辑器导出的界面预设/节点（见 BoothConfig.HEAD_UI）：
@@ -163,15 +163,17 @@ local function destroy_head_layer(key)
     end
 end
 
----把等级/每秒收益写进头顶界面的文本节点（对所有可见玩家生效）。
+---把等级/每秒收益/累计收益写进头顶界面的文本节点（对所有可见玩家生效）。
 ---@param layer any
 ---@param level integer
 ---@param income_per_second integer
-local function set_head_text(layer, level, income_per_second)
+---@param income_total integer
+local function set_head_text(layer, level, income_per_second, income_total)
     local style = BoothConfig.HEAD_UI.style or {}
     local level_node = get_scene_ui_node(layer, BoothConfig.HEAD_UI.level_node)
     local income_node = get_scene_ui_node(layer, BoothConfig.HEAD_UI.income_node)
-    if not level_node and not income_node then
+    local total_node = get_scene_ui_node(layer, BoothConfig.HEAD_UI.total_node)
+    if not level_node and not income_node and not total_node then
         return
     end
 
@@ -203,6 +205,15 @@ local function set_head_text(layer, level, income_per_second)
             role.set_label_outline_enabled(income_node, true)
             role.set_label_outline_color(income_node, style.outline_color or 0xFF000000)
             role.set_label_outline_width(income_node, to_fixed(style.outline_width or 2))
+        end
+        if total_node then
+            role.set_label_text(total_node, (style.total_prefix or "累计 ") .. tostring(income_total))
+            role.set_label_color(total_node, style.total_color or 0xFFFFFFFF, to_fixed(0))
+            role.set_label_font_size(total_node, style.total_font_size or 44, to_fixed(0))
+            role.set_label_background_opacity(total_node, to_fixed(style.label_background_opacity or 0.0), to_fixed(0))
+            role.set_label_outline_enabled(total_node, true)
+            role.set_label_outline_color(total_node, style.outline_color or 0xFF000000)
+            role.set_label_outline_width(total_node, to_fixed(style.outline_width or 2))
         end
         for _, background_node in ipairs(background_nodes) do
             role.set_node_visible(background_node, style.background_visible == true)
@@ -262,7 +273,8 @@ function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
     local attrs = placement.attrs or {}
     local level = math.tointeger(attrs.level or 1) or 1
     local income = math.tointeger(attrs.income_per_second or 0) or 0
-    set_head_text(layer, level, income)
+    local total = BoothState.booth_income_total(state, zone_id, booth_index)
+    set_head_text(layer, level, income, total)
 end
 
 -- ---------- 刷新入口 ----------

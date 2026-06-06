@@ -206,7 +206,7 @@ function ClickerController.initialize_state(state)
 end
 
 ---@param session PlayerSession
-function ClickerController.initialize_role(session)
+function ClickerController.setup_session(session)
     local role = session.role
     HeadsUpDisplay.render(role, session.state)
     FloatText.initialize_role(role)
@@ -223,10 +223,24 @@ function ClickerController.initialize_role(session)
     end
 end
 
----@param role Role
-function ClickerController.cleanup_role(role)
+---@param session PlayerSession
+function ClickerController.initialize_role(session)
+    ClickerController.setup_session(session)
+end
+
+---@param session PlayerSession
+function ClickerController.cleanup_session(session)
+    local role = session and session.role
+    if not role then
+        return
+    end
     FloatText.cleanup_role(role)
     CharacterView.cleanup_role(role)
+end
+
+---@param role Role
+function ClickerController.cleanup_role(role)
+    ClickerController.cleanup_session({ role = role })
 end
 
 function ClickerController.shutdown()

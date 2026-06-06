@@ -53,8 +53,9 @@ end
 
 ---玩家进入时读取或创建展台状态，并编排子模块的角色级初始化：
 ---初始隐藏交互按钮、按存档重建世界放置物、刷新所有展区场景表现。
----@param role Role
-function BoothController.initialize_role(role)
+---@param session PlayerSession
+function BoothController.setup_session(session)
+    local role = session and session.role
     local role_id = get_role_id(role)
     if not role_id then
         return
@@ -75,9 +76,15 @@ function BoothController.initialize_role(role)
     end
 end
 
----玩家离开时编排子模块清理（销毁世界放置物、清交互记录），再保存并移除展台状态。
 ---@param role Role
-function BoothController.cleanup_role(role)
+function BoothController.initialize_role(role)
+    BoothController.setup_session({ role = role })
+end
+
+---玩家离开时编排子模块清理（销毁世界放置物、清交互记录），再保存并移除展台状态。
+---@param session PlayerSession
+function BoothController.cleanup_session(session)
+    local role = session and session.role
     local role_id = get_role_id(role)
     if not role_id then
         return
@@ -93,6 +100,11 @@ function BoothController.cleanup_role(role)
         BoothPersistence.save(role, state)
     end
     state_by_role_id[role_id] = nil
+end
+
+---@param role Role
+function BoothController.cleanup_role(role)
+    BoothController.cleanup_session({ role = role })
 end
 
 ---获取玩家当前展台状态；不存在时现场读取。
@@ -175,6 +187,9 @@ function BoothController.tick_income(role)
     for _, zone in ipairs(BoothConfig.ZONES) do
         if BoothState.is_zone_unlocked(state, zone.id) then
             zone_view.refresh_board(role, zone.id)
+            for booth_index = 0, zone.booth_count - 1 do
+                zone_view.refresh_booth_label(role, zone.id, booth_index)
+            end
         end
     end
 end
@@ -202,6 +217,8 @@ function BoothController.unlock_zone(role, zone_id)
         return false
     end
     BoothPersistence.save(role, state)
+    local zone_view = submodules()
+    zone_view.refresh_zone(role, zone_id)
     return true
 end
 
@@ -215,6 +232,8 @@ function BoothController.lock_zone(role, zone_id)
         return false
     end
     BoothPersistence.save(role, state)
+    local zone_view = submodules()
+    zone_view.refresh_zone(role, zone_id)
     return true
 end
 
@@ -247,6 +266,8 @@ function BoothController.try_unlock_zone(role, zone_id, spend_fn)
 
     BoothState.unlock_zone(state, zone_id)
     BoothPersistence.save(role, state)
+    local zone_view = submodules()
+    zone_view.refresh_zone(role, zone_id)
     return true, "ok"
 end
 
