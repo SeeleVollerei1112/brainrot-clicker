@@ -35,6 +35,18 @@ local MallConfig = {
     -- 商城画布与开关
     CANVAS_NAME = "商城画布",
 
+    -- 商城画布开关的自定义事件（画布在编辑器绑定了 show/hide_event）
+    EVENTS = {
+        open = "OPEN_MALL_CANVAS",
+        close = "CLOSE_MALL_CANVAS",
+    },
+
+    -- 入口按钮（世界画布 btn_shop）/ 关闭按钮（商城画布内）节点名
+    BUTTONS = {
+        open = "btn_shop",
+        close = "mall_btn_close",
+    },
+
     UI = {
         sidebar = "侧边栏",
 

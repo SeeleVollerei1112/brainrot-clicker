@@ -6,6 +6,24 @@ Clicker/ClickerConfig.lua
 
 ---@class ClickerConfig
 local ClickerConfig = {
+    -- 点击画布开关的自定义事件（画布在编辑器绑定了 show/hide_event）
+    EVENTS = {
+        open_click_canvas = "OPEN_CLICK_CANVAS",
+        close_click_canvas = "CLOSE_CLICK_CANVAS",
+    },
+
+    -- 入口/退出按钮节点名：launch 在世界画布，exit 在点击画布
+    BUTTONS = {
+        launch = "btn_launch",
+        exit = "btn_exit",
+    },
+
+    -- 入口/退出按钮文案
+    BUTTON_TEXT = {
+        launch = "开始点击",
+        exit = "",
+    },
+
     INITIAL = {
         click_power = 1,
         brainrot = 0,

@@ -27,7 +27,7 @@ end
 ---打开商城画布并渲染默认标签页。
 ---@param role Role
 local function handle_open(role)
-    role.send_ui_custom_event(AppConfig.APP.events.open_mall, {})
+    role.send_ui_custom_event(MallConfig.EVENTS.open, {})
     MallView.initialize_role(role)
     MallView.render(role, MallSystem.get_display_data())
     MallView.select_tab(role, MallView.get_default_tab_key())
@@ -36,7 +36,7 @@ end
 ---关闭商城画布。
 ---@param role Role
 local function handle_close(role)
-    role.send_ui_custom_event(AppConfig.APP.events.close_mall, {})
+    role.send_ui_custom_event(MallConfig.EVENTS.close, {})
 end
 
 ---切换侧边栏标签页。
@@ -68,7 +68,7 @@ function MallController.setup_session(session)
     if not role then
         return
     end
-    role.send_ui_custom_event(AppConfig.APP.events.close_mall, {})
+    role.send_ui_custom_event(MallConfig.EVENTS.close, {})
     MallView.initialize_role(role)
 end
 
@@ -83,7 +83,7 @@ function MallController.initialize(register_trigger)
     MallView.initialize()
 
     -- 入口按钮（世界画布的 btn_shop）：打开商城
-    local open_button = UINodes[AppConfig.APP.buttons.mall_open]
+    local open_button = UINodes[MallConfig.BUTTONS.open]
     bind_button(
         open_button,
         { EVENT.EUI_NODE_TOUCH_EVENT, open_button, AppConfig.TOUCH.CLICK },
@@ -93,11 +93,11 @@ function MallController.initialize(register_trigger)
             end
         end,
         register_trigger,
-        "[MallController] 缺少入口按钮节点: " .. tostring(AppConfig.APP.buttons.mall_open)
+        "[MallController] 缺少入口按钮节点: " .. tostring(MallConfig.BUTTONS.open)
     )
 
     -- 商城画布内的关闭按钮
-    local close_button = UINodes[AppConfig.APP.buttons.mall_close]
+    local close_button = UINodes[MallConfig.BUTTONS.close]
     bind_button(
         close_button,
         { EVENT.EUI_NODE_TOUCH_EVENT, close_button, AppConfig.TOUCH.CLICK },
@@ -107,7 +107,7 @@ function MallController.initialize(register_trigger)
             end
         end,
         register_trigger,
-        "[MallController] 缺少关闭按钮节点: " .. tostring(AppConfig.APP.buttons.mall_close)
+        "[MallController] 缺少关闭按钮节点: " .. tostring(MallConfig.BUTTONS.close)
     )
 
     -- 侧边栏标签按钮 + 各商品购买按钮

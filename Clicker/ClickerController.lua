@@ -102,7 +102,7 @@ function ClickerController.handle_open_click_canvas(session)
 
     local role = session.role
     session.click_canvas_open = true
-    role.send_ui_custom_event(AppConfig.APP.events.open_click_canvas, {})
+    role.send_ui_custom_event(ClickerConfig.EVENTS.open_click_canvas, {})
     HeadsUpDisplay.render(role, session.state)
     render_shop(session)
 end
@@ -114,7 +114,7 @@ function ClickerController.handle_close_click_canvas(session)
     end
 
     session.click_canvas_open = false
-    session.role.send_ui_custom_event(AppConfig.APP.events.close_click_canvas, {})
+    session.role.send_ui_custom_event(ClickerConfig.EVENTS.close_click_canvas, {})
 end
 
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
@@ -144,7 +144,7 @@ local function bind_ui_interactions(register_trigger)
             end
         )
     else
-        LuaAPI.log("[ClickerController] 缺少世界画布节点: " .. AppConfig.APP.buttons.launch, 1)
+        LuaAPI.log("[ClickerController] 缺少世界画布节点: " .. ClickerConfig.BUTTONS.launch, 1)
     end
 
     if exit_button then
@@ -158,7 +158,7 @@ local function bind_ui_interactions(register_trigger)
             end
         )
     else
-        LuaAPI.log("[ClickerController] 缺少点击画布节点: " .. AppConfig.APP.buttons.exit, 1)
+        LuaAPI.log("[ClickerController] 缺少点击画布节点: " .. ClickerConfig.BUTTONS.exit, 1)
     end
 end
 
@@ -187,8 +187,8 @@ function ClickerController.initialize(register_trigger, session_finder)
         return
     end
 
-    launch_button = GameAPI.get_eui_child_by_name(world_canvas, AppConfig.APP.buttons.launch)
-    exit_button = GameAPI.get_eui_child_by_name(click_canvas, AppConfig.APP.buttons.exit)
+    launch_button = GameAPI.get_eui_child_by_name(world_canvas, ClickerConfig.BUTTONS.launch)
+    exit_button = GameAPI.get_eui_child_by_name(click_canvas, ClickerConfig.BUTTONS.exit)
     find_session = session_finder
 
     CharacterView.initialize(click_canvas)
@@ -216,10 +216,10 @@ function ClickerController.setup_session(session)
     UpgradeShopPanel.initialize_role(role)
 
     if launch_button then
-        role.set_button_text(launch_button, AppConfig.APP.text.launch)
+        role.set_button_text(launch_button, ClickerConfig.BUTTON_TEXT.launch)
     end
     if exit_button then
-        role.set_button_text(exit_button, AppConfig.APP.text.exit)
+        role.set_button_text(exit_button, ClickerConfig.BUTTON_TEXT.exit)
     end
 end
 
