@@ -6,12 +6,9 @@ Clicker/ClickerController.lua
 ]]
 
 local AppConfig = require("App.AppConfig")
-local CharacterView = require("Clicker.CharacterView")
 local ClickerConfig = require("Clicker.ClickerConfig")
 local ClickerState = require("Clicker.ClickerState")
-local ComboBar = require("Combo.ComboBar")
-local FloatText = require("Clicker.FloatTextView")
-local HeadsUpDisplay = require("Clicker.HeadsUpDisplay")
+local ClickerView = require("Clicker.ClickerView")
 local UINodes = require("Data.UINodes")
 local UpgradeShopView = require("Clicker.UpgradeShop.UpgradeShopView")
 local UpgradeShopSystem = require("Clicker.UpgradeShop.UpgradeShopSystem")
@@ -39,18 +36,18 @@ local function render_combo_update(session, result)
         return
     end
 
-    ComboBar.render_progress(session.role, session.state)
+    ClickerView.render_progress(session.role, session.state)
     if result.tier_changed then
-        ComboBar.handle_tier_change(session.role, result.old_tier, result.new_tier)
+        ClickerView.handle_tier_change(session.role, result.old_tier, result.new_tier)
     elseif result.should_pop then
-        ComboBar.pop(session.role)
+        ClickerView.pop(session.role)
     end
 end
 
 ---@param session PlayerSession
 local function refresh_skin(session)
-    if CharacterView.update_skin(session.role, session.state.currency.total_brainrot) then
-        FloatText.set_color(session.role, CharacterView.get_active_float_color(session.role))
+    if ClickerView.update_skin(session.role, session.state.currency.total_brainrot) then
+        ClickerView.set_color(session.role, ClickerView.get_active_float_color(session.role))
     end
 end
 
@@ -62,10 +59,10 @@ function ClickerController.handle_character_click(session)
 
     local role = session.role
     local income = ClickerState.add_click_income(session.state)
-    FloatText.show(role, income)
-    CharacterView.play_click_feedback(role)
+    ClickerView.show(role, income)
+    ClickerView.play_click_feedback(role)
     refresh_skin(session)
-    HeadsUpDisplay.render(role, session.state)
+    ClickerView.render(role, session.state)
     if session.click_canvas_open then
         render_shop(session)
     end
@@ -88,7 +85,7 @@ function ClickerController.handle_shop_purchase(session, item_id)
         )
     end
 
-    HeadsUpDisplay.render(session.role, session.state)
+    ClickerView.render(session.role, session.state)
     render_shop(session)
 end
 
@@ -101,7 +98,7 @@ function ClickerController.handle_open_click_canvas(session)
     local role = session.role
     session.click_canvas_open = true
     role.send_ui_custom_event(ClickerConfig.EVENTS.open_click_canvas, {})
-    HeadsUpDisplay.render(role, session.state)
+    ClickerView.render(role, session.state)
     render_shop(session)
 end
 
@@ -117,7 +114,7 @@ end
 
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 local function bind_ui_interactions(register_trigger)
-    CharacterView.bind_click_handler(function(role)
+    ClickerView.bind_click_handler(function(role)
         local session = find_session(role)
         if session then
             ClickerController.handle_character_click(session)
@@ -163,7 +160,7 @@ end
 ---@param session PlayerSession
 function ClickerController.tick_passive_income(session)
     ClickerState.add_passive_income(session.state)
-    HeadsUpDisplay.render(session.role, session.state)
+    ClickerView.render(session.role, session.state)
     refresh_skin(session)
     if session.click_canvas_open then
         render_shop(session)
@@ -189,11 +186,8 @@ function ClickerController.initialize(application)
     exit_button = GameAPI.get_eui_child_by_name(click_canvas, ClickerConfig.BUTTONS.exit)
     find_session = application.sessions.find_by_role
 
-    CharacterView.initialize(click_canvas)
-    HeadsUpDisplay.initialize(click_canvas)
-    FloatText.initialize(click_canvas)
+    ClickerView.initialize(click_canvas)
     UpgradeShopView.initialize(click_canvas)
-    ComboBar.initialize(click_canvas)
 
     bind_ui_interactions(register_trigger)
 
@@ -220,11 +214,9 @@ end
 ---@param session PlayerSession
 function ClickerController.setup_session(session)
     local role = session.role
-    HeadsUpDisplay.render(role, session.state)
-    FloatText.initialize_role(role)
-    CharacterView.initialize_role(role)
+    ClickerView.render(role, session.state)
+    ClickerView.initialize_role(role)
     refresh_skin(session)
-    ComboBar.initialize_role(role)
     UpgradeShopView.initialize_role(role)
 
     if launch_button then
@@ -246,8 +238,7 @@ function ClickerController.cleanup_session(session)
     if not role then
         return
     end
-    FloatText.cleanup_role(role)
-    CharacterView.cleanup_role(role)
+    ClickerView.cleanup_role(role)
 end
 
 ---@param role Role
@@ -256,9 +247,7 @@ function ClickerController.cleanup_role(role)
 end
 
 function ClickerController.shutdown()
-    CharacterView.shutdown()
-    ComboBar.shutdown()
-    FloatText.shutdown()
+    ClickerView.shutdown()
     find_session = nil
     launch_button = nil
     exit_button = nil
