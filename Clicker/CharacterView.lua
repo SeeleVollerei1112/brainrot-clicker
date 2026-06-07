@@ -11,7 +11,7 @@ Clicker/CharacterView.lua
 local CharacterView = {}
 local AppConfig = require("App.AppConfig")
 local ClickerConfig = require("Clicker.ClickerConfig")
-local SkinSystem = require("Clicker.SkinSystem")
+local SkinSystem = require("Clicker.ClickerState")
 local configuration = ClickerConfig.CHARACTER
 local nodes = {}
 local effect_nodes = {}

@@ -5,7 +5,7 @@ Combo/ComboBar.lua
 ]]
 
 local ComboBar = {}
-local ComboConfig = require("Combo.ComboConfig")
+local ComboConfig = require("Clicker.ClickerConfig").COMBO
 local configuration = ComboConfig.BAR
 local nodes = {}
 local animation_generations_by_role_id = {}

@@ -1,10 +1,10 @@
 --[[
-UpgradeShop/UpgradeShopSystem.lua
+Clicker/UpgradeShop/UpgradeShopSystem.lua
 
 升级商店业务层：初始化商品状态、生成展示数据、处理购买和数值成长。
 ]]
 
-local PlayerState = require("Clicker.PlayerState")
+local ClickerState = require("Clicker.ClickerState")
 local UpgradeShopConfig = require("Clicker.UpgradeShop.UpgradeShopConfig")
 
 ---@class ShopItemDisplayData
@@ -155,7 +155,7 @@ function UpgradeShopSystem.purchase(state, item_id)
     if item_configuration.max_level and item_state.level >= item_configuration.max_level then
         return { success = false, reason = "max_level" }
     end
-    if not PlayerState.spend_brainrot(state, item_state.current_price) then
+    if not ClickerState.spend_brainrot(state, item_state.current_price) then
         return { success = false, reason = "not_enough_brainrot" }
     end
 

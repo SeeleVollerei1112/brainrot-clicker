@@ -8,10 +8,8 @@ Clicker/ClickerController.lua
 local AppConfig = require("App.AppConfig")
 local CharacterView = require("Clicker.CharacterView")
 local ClickerConfig = require("Clicker.ClickerConfig")
+local ClickerState = require("Clicker.ClickerState")
 local ComboBar = require("Combo.ComboBar")
-local ComboConfig = require("Combo.ComboConfig")
-local ComboSystem = require("Combo.ComboSystem")
-local CurrencySystem = require("Clicker.CurrencySystem")
 local FloatText = require("Clicker.FloatTextView")
 local HeadsUpDisplay = require("Clicker.HeadsUpDisplay")
 local UINodes = require("Data.UINodes")
@@ -21,7 +19,7 @@ local UpgradeShopSystem = require("Clicker.UpgradeShop.UpgradeShopSystem")
 local ClickerController = {}
 
 ClickerController.PASSIVE_INCOME_INTERVAL = ClickerConfig.PASSIVE_INCOME.tick_interval
-ClickerController.COMBO_INTERVAL = ComboConfig.TICK_INTERVAL
+ClickerController.COMBO_INTERVAL = ClickerConfig.COMBO.TICK_INTERVAL
 
 ---@type fun(role: Role): PlayerSession|nil
 local find_session = nil
@@ -63,7 +61,7 @@ function ClickerController.handle_character_click(session)
     end
 
     local role = session.role
-    local income = CurrencySystem.add_click_income(session.state)
+    local income = ClickerState.add_click_income(session.state)
     FloatText.show(role, income)
     CharacterView.play_click_feedback(role)
     refresh_skin(session)
@@ -72,7 +70,7 @@ function ClickerController.handle_character_click(session)
         render_shop(session)
     end
 
-    render_combo_update(session, ComboSystem.add_click(session.state))
+    render_combo_update(session, ClickerState.add_combo_click(session.state))
 end
 
 ---@param session PlayerSession
@@ -164,7 +162,7 @@ end
 
 ---@param session PlayerSession
 function ClickerController.tick_passive_income(session)
-    CurrencySystem.add_passive_income(session.state)
+    ClickerState.add_passive_income(session.state)
     HeadsUpDisplay.render(session.role, session.state)
     refresh_skin(session)
     if session.click_canvas_open then
@@ -174,7 +172,7 @@ end
 
 ---@param session PlayerSession
 function ClickerController.tick_combo_decay(session)
-    render_combo_update(session, ComboSystem.decay(session.state))
+    render_combo_update(session, ClickerState.decay_combo(session.state))
 end
 
 ---@param application Application
