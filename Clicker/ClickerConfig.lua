@@ -6,6 +6,24 @@ Clicker/ClickerConfig.lua
 
 ---@class ClickerConfig
 local ClickerConfig = {
+    -- 点击画布开关的自定义事件（画布在编辑器绑定了 show/hide_event）
+    EVENTS = {
+        open_click_canvas = "OPEN_CLICK_CANVAS",
+        close_click_canvas = "CLOSE_CLICK_CANVAS",
+    },
+
+    -- 入口/退出按钮节点名：launch 在世界画布，exit 在点击画布
+    BUTTONS = {
+        launch = "btn_launch",
+        exit = "btn_exit",
+    },
+
+    -- 入口/退出按钮文案
+    BUTTON_TEXT = {
+        launch = "开始点击",
+        exit = "",
+    },
+
     INITIAL = {
         click_power = 1,
         brainrot = 0,
@@ -89,6 +107,49 @@ local ClickerConfig = {
                 effect_style = nil,
                 burst = { rest_color = 0x44C040FF, flash_color = 0xDDD080FF, rest_transition = 0.30 },
             },
+        },
+    },
+
+    -- 连击配置（并入自原 Combo/ComboConfig.lua）：连击增长/衰减/倍率档位 + 连击条反馈参数。
+    COMBO = {
+        TIERS = {
+            { threshold = 20,  multiplier = 2 },
+            { threshold = 50,  multiplier = 3 },
+            { threshold = 100, multiplier = 5 },
+        },
+        CLICK_GAIN = 4,
+        DECAY_RATE = 1,
+        MAX = 100,
+        TICK_INTERVAL = 0.1,
+        RESET_TICKS = 15,
+
+        BAR = {
+            nodes = {
+                bar = "combo_bar",
+                label = "combo_label",
+            },
+            settle_size = 64,
+            pop_start_size = 40,
+            pop_peak_size = 110,
+            pop_grow_duration = 0.10,
+            pop_settle_duration = 0.12,
+            pop_start_delay_frames = 1,
+            pop_settle_delay_frames = 15,
+            shadow_sweep = { 0, 5, 10, 13, 10, 5, 0 },
+            shadow_sweep_frames = 5,
+            shadow_reset_x = 0,
+            shadow_reset_y = -4,
+            tier_colors = {
+                [1] = 0xFFFFD700,
+                [2] = 0xFFFF8C00,
+                [3] = 0xFFFF3300,
+            },
+            tier_texts = {
+                [1] = "×2",
+                [2] = "×3",
+                [3] = "×5",
+            },
+            progress_transition = 0.10,
         },
     },
 

@@ -15,19 +15,37 @@ BoothConfig 的命名规则通过 LuaAPI.query_unit 查询并缓存。
 ]]
 
 local BoothConfig = require("Booth.BoothConfig")
-local BoothController = require("Booth.BoothController")
 local BoothState = require("Booth.BoothState")
 local PrefabData = require("Data.Prefab")
 local UINodes = require("Data.UINodes")
 
 local BoothZoneView = {}
 
+-- 状态读写门面，由 BoothController 在初始化时注入（替代反向 require，消除循环依赖）。
+---@type table
+local controller
+
+---注入展台控制器（提供 get_state）。
+---@param booth_controller table
+function BoothZoneView.bind(booth_controller)
+    controller = booth_controller
+end
+
 local COLOR_LOCKED = 0xFFFF3030
 local COLOR_UNLOCKED = 0xFFFFFFFF
+
+-- 锁定时把展台组件组沿 Y 轴下沉这么多，移出玩家可达范围（实测展台原始 y≈2，
+-- 下沉 5000 足够远且静态体不会回弹）。详见 lock_stand / unlock_stand 的成因注释。
+local STAND_LOCK_DROP = 5000.0
 
 -- 展示台模型：stands_cache[zone_id][booth_index] = Unit
 ---@type table<integer, table<integer, Unit>>
 local stands_cache = {}
+
+-- 展示台原始坐标：stand_home[zone_id][booth_index] = Vector3。
+-- resolve 时（展台尚在原位）记录，锁定移走 / 解锁移回都以此为基准，避免累积偏移。
+---@type table<integer, table<integer, Vector3>>
+local stand_home = {}
 
 ---@type table<integer, Unit>
 local board_cache = {}
@@ -82,6 +100,7 @@ local function resolve_zone_units(zone_id)
     resolved_zone[zone_id] = true
 
     local stands = {}
+    local homes = {}
     local zone = BoothConfig.find_zone(zone_id)
     if zone then
         for booth_index = 0, zone.booth_count - 1 do
@@ -89,12 +108,16 @@ local function resolve_zone_units(zone_id)
             local unit = LuaAPI.query_unit(name)
             if unit then
                 stands[booth_index] = unit
+                -- 此刻展台仍在编辑器原位，记录原始坐标作为移走/移回的基准。
+                local p = unit.get_position()
+                homes[booth_index] = math.Vector3(p.x, p.y, p.z)
             else
                 LuaAPI.log("[BoothZoneView] 找不到展台模型: " .. tostring(name), 1)
             end
         end
     end
     stands_cache[zone_id] = stands
+    stand_home[zone_id] = homes
 
     local board_name = BoothConfig.zone_board_name(zone_id)
     local board = LuaAPI.query_unit(board_name)
@@ -104,24 +127,31 @@ local function resolve_zone_units(zone_id)
     board_cache[zone_id] = board
 end
 
----@param unit Unit
-local function unlock_stand(unit)
-    unit.set_model_visible(true)
-    unit.set_physics_active(true)
-    unit.set_model_physic_visible(true)
+-- 展台是组件组(UnitGroup)，锁定/解锁的难点在「碰撞体积」无法可逆开关：
+--   * 实测对组件组 set_physics_active(false) 是「单向门」——之后再 set_physics_active(true)
+--     不生效(is_physics_active 持续 false)，与可见性、帧时序均无关。故不能用它关碰撞。
+--   * set_model_visible(false) 只隐藏模型，不屏蔽碰撞——直接隐藏会留下「隐形墙」。
+-- 唯一可逆的杠杆是「位置」(静态体，set_position 可来回移动)。因此：
+--   锁定 = 隐藏模型 + 把组件组下沉到玩家够不到的地方（碰撞随之移走）；
+--   解锁 = 移回原位 + 显示模型。物理标志一概不动（恒为编辑器默认=开）。
+-- home 为 resolve 时记录的原始坐标；缺失(模型没查到)时退化为只切显隐。
 
-    LuaAPI.call_delay_frame(1, function()
-        unit.set_model_visible(true)
-        unit.set_physics_active(true)
-        unit.set_model_physic_visible(true)
-    end)
+---@param unit Unit
+---@param home Vector3|nil
+local function unlock_stand(unit, home)
+    if home then
+        unit.set_position(math.Vector3(home.x, home.y, home.z))
+    end
+    unit.set_model_visible(true)
 end
 
 ---@param unit Unit
-local function lock_stand(unit)
-    unit.set_physics_active(false)
-    unit.set_model_physic_visible(false)
+---@param home Vector3|nil
+local function lock_stand(unit, home)
     unit.set_model_visible(false)
+    if home then
+        unit.set_position(math.Vector3(home.x, home.y - STAND_LOCK_DROP, home.z))
+    end
 end
 
 function BoothZoneView.initialize()
@@ -130,6 +160,7 @@ function BoothZoneView.initialize()
         GameAPI.destroy_scene_ui(layer)
     end
     stands_cache = {}
+    stand_home = {}
     board_cache = {}
     resolved_zone = {}
     head_layer = {}
@@ -143,7 +174,7 @@ end
 ---@param zone_id integer
 ---@return integer income_per_second, integer income_total
 function BoothZoneView.compute_zone_income(role, zone_id)
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     if not state then
         return 0, 0
     end
@@ -229,7 +260,7 @@ end
 function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
     local key = slot_key(zone_id, booth_index)
 
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     local placement = state and BoothState.get_placement(state, zone_id, booth_index)
     local unlocked = state and BoothState.is_zone_unlocked(state, zone_id)
     if not placement or not unlocked then
@@ -289,7 +320,7 @@ function BoothZoneView.refresh_board(role, zone_id)
         return
     end
 
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     local unlocked = state and BoothState.is_zone_unlocked(state, zone_id)
     if unlocked then
         local per_second, total = BoothZoneView.compute_zone_income(role, zone_id)
@@ -305,21 +336,22 @@ end
 ---@param role Role
 ---@param zone_id integer
 function BoothZoneView.refresh_zone(role, zone_id)
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     local unlocked = BoothState.is_zone_unlocked(state, zone_id)
 
     resolve_zone_units(zone_id)
 
     local zone = BoothConfig.find_zone(zone_id)
     local stands = stands_cache[zone_id] or {}
+    local homes = stand_home[zone_id] or {}
     if zone then
         for booth_index = 0, zone.booth_count - 1 do
             local stand = stands[booth_index]
             if stand then
                 if unlocked then
-                    unlock_stand(stand)
+                    unlock_stand(stand, homes[booth_index])
                 else
-                    lock_stand(stand)
+                    lock_stand(stand, homes[booth_index])
                 end
             end
             BoothZoneView.refresh_booth_label(role, zone_id, booth_index)

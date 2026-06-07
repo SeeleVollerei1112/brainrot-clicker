@@ -18,6 +18,18 @@ local LotteryConfig = {
     CANVAS_NAME = "转盘画布",
     BUTTON_NAME = "抽奖",
 
+    -- 转盘画布开关的自定义事件（画布在编辑器绑定了 show/hide_event）
+    EVENTS = {
+        open = "OPEN_LOTTERY_CANVAS",
+        close = "CLOSE_LOTTERY_CANVAS",
+    },
+
+    -- 入口按钮（世界画布）/ 关闭按钮（转盘画布内）节点名
+    BUTTONS = {
+        open = "btn_lottery_spin",
+        close = "关闭",
+    },
+
     TOUCH_CLICK = 1,
     TIP_DURATION = 2.0,
 

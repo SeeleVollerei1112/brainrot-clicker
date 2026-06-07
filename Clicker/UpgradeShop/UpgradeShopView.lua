@@ -1,12 +1,12 @@
 --[[
-UpgradeShop/UpgradeShopPanel.lua
+Clicker/UpgradeShop/UpgradeShopView.lua
 
 升级商店表现层。
 静态节点由编辑器搭好，业务层只传入展示数据，本文件负责绑定节点、渲染文本与触摸状态。
 ]]
 
-local UpgradeShopPanel = {}
-local UpgradeShopConfig = require("UpgradeShop.UpgradeShopConfig")
+local UpgradeShopView = {}
+local UpgradeShopConfig = require("Clicker.UpgradeShop.UpgradeShopConfig")
 local AppConfig = require("App.AppConfig")
 local configuration = UpgradeShopConfig.UI
 local node_names = configuration.nodes
@@ -39,7 +39,7 @@ end
 local function fetch_child(parent, name, required)
     if not is_node(parent) then
         if required then
-            LuaAPI.log("[UpgradeShopPanel] 缺少父节点，无法获取: " .. name, 1)
+            LuaAPI.log("[UpgradeShopView] 缺少父节点，无法获取: " .. name, 1)
         end
         return nil
     end
@@ -47,7 +47,7 @@ local function fetch_child(parent, name, required)
     local node = GameAPI.get_eui_child_by_name(parent, name)
     if not is_node(node) then
         if required then
-            LuaAPI.log("[UpgradeShopPanel] 缺少静态节点: " .. name, 1)
+            LuaAPI.log("[UpgradeShopView] 缺少静态节点: " .. name, 1)
         end
         return nil
     end
@@ -183,7 +183,7 @@ end
 
 ---绑定编辑器内已搭好的商店节点。
 ---@param canvas ENode
-function UpgradeShopPanel.initialize(canvas)
+function UpgradeShopView.initialize(canvas)
     panel = fetch_child(canvas, node_names.panel, true)
     listview = nil
     cards_by_item_id = {}
@@ -192,7 +192,7 @@ function UpgradeShopPanel.initialize(canvas)
     click_power_label = nil
 
     if not is_node(panel) then
-        LuaAPI.log("[UpgradeShopPanel] 静态商城根节点不存在，跳过商城绑定", 1)
+        LuaAPI.log("[UpgradeShopView] 静态商城根节点不存在，跳过商城绑定", 1)
         return
     end
 
@@ -200,7 +200,7 @@ function UpgradeShopPanel.initialize(canvas)
     click_power_label = fetch_child(panel, node_names.number, true)
     listview = fetch_child(panel, node_names.listview, true)
     if not is_node(listview) then
-        LuaAPI.log("[UpgradeShopPanel] 静态商城列表节点不存在，跳过商城绑定", 1)
+        LuaAPI.log("[UpgradeShopView] 静态商城列表节点不存在，跳过商城绑定", 1)
         return
     end
 
@@ -218,12 +218,12 @@ function UpgradeShopPanel.initialize(canvas)
             card.item_id = item_configuration.id
             cards_by_item_id[item_configuration.id] = card
         else
-            LuaAPI.log("[UpgradeShopPanel] 商品缺少静态槽位: index=" .. tostring(slot_index), 1)
+            LuaAPI.log("[UpgradeShopView] 商品缺少静态槽位: index=" .. tostring(slot_index), 1)
         end
     end
 
     LuaAPI.log(
-        "[UpgradeShopPanel] static slots bound items=" .. tostring(#UpgradeShopConfig.ITEMS)
+        "[UpgradeShopView] static slots bound items=" .. tostring(#UpgradeShopConfig.ITEMS)
         .. " slots=" .. tostring(#static_slots),
         0
     )
@@ -231,7 +231,7 @@ end
 
 ---初始化单个玩家看到的商店样式和触摸状态。
 ---@param role Role
-function UpgradeShopPanel.initialize_role(role)
+function UpgradeShopView.initialize_role(role)
     if not role then
         return
     end
@@ -257,7 +257,7 @@ end
 ---通过主控制器传入的注册函数绑定购买事件。
 ---@param on_purchase fun(role: Role, item_id: integer)
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
-function UpgradeShopPanel.bind_purchase_handler(on_purchase, register_trigger)
+function UpgradeShopView.bind_purchase_handler(on_purchase, register_trigger)
     for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local item_id = item_configuration.id
         local card = cards_by_item_id[item_id]
@@ -278,7 +278,7 @@ end
 ---设置单个玩家的商店面板显隐。
 ---@param role Role
 ---@param visible boolean
-function UpgradeShopPanel.set_visible(role, visible)
+function UpgradeShopView.set_visible(role, visible)
     if not role then
         return
     end
@@ -305,7 +305,7 @@ end
 ---渲染 UpgradeShopSystem 生成的商店展示数据。
 ---@param role Role
 ---@param display_data ShopDisplayData
-function UpgradeShopPanel.render(role, display_data)
+function UpgradeShopView.render(role, display_data)
     if not role or not display_data then
         return
     end
@@ -363,4 +363,4 @@ function UpgradeShopPanel.render(role, display_data)
     end
 end
 
-return UpgradeShopPanel
+return UpgradeShopView

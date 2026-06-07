@@ -1,5 +1,5 @@
 --[[
-UpgradeShop/UpgradeShopConfig.lua
+Clicker/UpgradeShop/UpgradeShopConfig.lua
 
 点击升级商店配置：道具名、描述、兑换额度、等级与收益效果。
 ]]
