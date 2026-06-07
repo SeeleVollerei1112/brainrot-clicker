@@ -5,7 +5,7 @@ UpgradeShop/UpgradeShopSystem.lua
 ]]
 
 local PlayerState = require("Clicker.PlayerState")
-local UpgradeShopConfig = require("UpgradeShop.UpgradeShopConfig")
+local UpgradeShopConfig = require("Clicker.UpgradeShop.UpgradeShopConfig")
 
 ---@class ShopItemDisplayData
 ---@field id integer

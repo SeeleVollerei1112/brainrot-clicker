@@ -15,8 +15,8 @@ local CurrencySystem = require("Clicker.CurrencySystem")
 local FloatText = require("Clicker.FloatTextView")
 local HeadsUpDisplay = require("Clicker.HeadsUpDisplay")
 local UINodes = require("Data.UINodes")
-local UpgradeShopPanel = require("UpgradeShop.UpgradeShopPanel")
-local UpgradeShopSystem = require("UpgradeShop.UpgradeShopSystem")
+local UpgradeShopView = require("Clicker.UpgradeShop.UpgradeShopView")
+local UpgradeShopSystem = require("Clicker.UpgradeShop.UpgradeShopSystem")
 
 local ClickerController = {}
 
@@ -31,7 +31,7 @@ local exit_button = nil
 
 ---@param session PlayerSession
 local function render_shop(session)
-    UpgradeShopPanel.render(session.role, UpgradeShopSystem.get_display_data(session.state))
+    UpgradeShopView.render(session.role, UpgradeShopSystem.get_display_data(session.state))
 end
 
 ---@param session PlayerSession
@@ -126,7 +126,7 @@ local function bind_ui_interactions(register_trigger)
         end
     end, register_trigger)
 
-    UpgradeShopPanel.bind_purchase_handler(function(role, item_id)
+    UpgradeShopView.bind_purchase_handler(function(role, item_id)
         local session = find_session(role)
         if session then
             ClickerController.handle_shop_purchase(session, item_id)
@@ -194,7 +194,7 @@ function ClickerController.initialize(application)
     CharacterView.initialize(click_canvas)
     HeadsUpDisplay.initialize(click_canvas)
     FloatText.initialize(click_canvas)
-    UpgradeShopPanel.initialize(click_canvas)
+    UpgradeShopView.initialize(click_canvas)
     ComboBar.initialize(click_canvas)
 
     bind_ui_interactions(register_trigger)
@@ -227,7 +227,7 @@ function ClickerController.setup_session(session)
     CharacterView.initialize_role(role)
     refresh_skin(session)
     ComboBar.initialize_role(role)
-    UpgradeShopPanel.initialize_role(role)
+    UpgradeShopView.initialize_role(role)
 
     if launch_button then
         role.set_button_text(launch_button, ClickerConfig.BUTTON_TEXT.launch)
