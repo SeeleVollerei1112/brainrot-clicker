@@ -24,9 +24,9 @@
 **风险**：极低
 
 **子任务**：
-- [ ] 再次确认全库无 `require("Util.dkjson")` / `require("dkjson")` 引用
-- [ ] 删除 `Util/dkjson.lua`
-- [ ] commit：`refactor: 删除未使用且不兼容沙箱的 dkjson`
+- [x] 再次确认全库无 `require("Util.dkjson")` / `require("dkjson")` 引用
+- [x] 删除 `Util/dkjson.lua`
+- [x] commit：`refactor: 删除未使用且不兼容沙箱的 dkjson`（884a955）
 
 **验收**：WHEN 跑测启动，THEN 无 `dkjson` 相关报错，序列化（展台存档）正常。
 
@@ -39,12 +39,12 @@
 **风险**：低（改事件常量引用点）
 
 **子任务**：
-- [ ] `open_lottery / close_lottery` → 移入 Lottery（`LotteryConfig` 或 `LotteryController`）
-- [ ] `open_mall / close_mall` → 移入 Mall
-- [ ] `open_click_canvas / close_click_canvas` → 移入 Clicker
-- [ ] 更新所有 `AppConfig.APP.events.*` 引用点指向新位置
-- [ ] `AppConfig` 仅保留 `TOUCH` 与 `APP.canvases`（含 `buttons/text` 视情况留在 App 或随功能迁移，保持引用一致）
-- [ ] commit：`refactor: 自定义事件归位到各功能模块`
+- [x] `open_lottery / close_lottery` → `LotteryConfig.EVENTS` / `BUTTONS`
+- [x] `open_mall / close_mall` → `MallConfig.EVENTS` / `BUTTONS`
+- [x] `open_click_canvas / close_click_canvas` → `ClickerConfig.EVENTS` / `BUTTONS` / `BUTTON_TEXT`
+- [x] 更新所有 `AppConfig.APP.events/buttons/text` 引用点指向新位置
+- [x] `AppConfig` 仅保留 `TOUCH` 与 `APP.canvases`（buttons/text 也随功能迁移）
+- [x] commit：`refactor: 自定义事件/按钮/文案归位到各功能 Config`（67a0efe）
 
 **验收**：WHEN 依次开关 点击/抽奖/商城 画布，THEN 三者均正常打开与关闭，无缺失事件报错。
 
@@ -141,8 +141,8 @@
 
 | 模块 | 名称 | 状态 | 依赖 |
 |------|------|------|------|
-| 1 | 删除 dkjson | ⬜ 未开始 | 无 |
-| 2 | AppConfig 事件归位 | ⬜ 未开始 | 无 |
+| 1 | 删除 dkjson | ✅ 已完成 (884a955) | 无 |
+| 2 | AppConfig 事件归位 | ✅ 已完成 (67a0efe) | 无 |
 | 3 | 定时器自注册 + Registry 退化 | ⬜ 未开始 | 无 |
 | 4 | Booth 去循环依赖 | ⬜ 未开始 | 模块 3 |
 | 5 | Clicker 合并消肿 | ⬜ 未开始 | 模块 2、3 |
