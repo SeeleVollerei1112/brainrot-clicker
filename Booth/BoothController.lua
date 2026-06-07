@@ -41,14 +41,34 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
----初始化入口；存档层本身无需注册引擎事件，但作为展台系统的统一入口，
----在此编排子模块的全局初始化（场景表现层 + 交互层）。
----@param register_trigger fun(event_arguments: table, callback: function): integer
-function BoothController.initialize(register_trigger)
-    -- 存档层暂无需注册引擎事件；保留签名与其它控制器一致。
+---初始化入口；作为展台系统的统一门面，在此编排子模块的全局初始化
+---（场景表现层 + 交互层），并自注册收益结算 / 自动存档定时器。
+---@param application Application
+function BoothController.initialize(application)
+    local register_trigger = application.register_trigger
     local zone_view, interaction = submodules()
     zone_view.initialize()
     interaction.initialize(register_trigger)
+
+    -- 收益结算定时器：仅内存累加 + 刷新公告板
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.INCOME_TICK_INTERVAL) },
+        function()
+            application.sessions.for_each(function(session)
+                BoothController.tick_income(session.role)
+            end)
+        end
+    )
+
+    -- 自动存档定时器
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.AUTOSAVE_INTERVAL) },
+        function()
+            application.sessions.for_each(function(session)
+                BoothController.save_now(session.role)
+            end)
+        end
+    )
 end
 
 ---玩家进入时读取或创建展台状态，并编排子模块的角色级初始化：

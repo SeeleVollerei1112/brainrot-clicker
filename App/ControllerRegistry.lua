@@ -3,6 +3,15 @@ App/ControllerRegistry.lua
 
 Controller 装配注册表。
 集中管理全局初始化、玩家会话初始化、玩家会话清理和关闭顺序。
+
+各 Controller 遵循统一接口（钩子均为可选）：
+  initialize(application)   -- 全局初始化 + 自注册定时器
+  setup_session(session)    -- 玩家会话级初始化
+  cleanup_session(session)  -- 玩家会话级清理
+  shutdown()                -- 全局关闭
+定时器（REPEAT_TIMEOUT）由各 Controller 在自己的 initialize 内通过
+application.register_trigger + application.sessions.for_each 自注册，本注册表
+不再承担任何功能专属的定时编排。
 ]]
 
 local BoothController = require("Booth.BoothController")
@@ -14,87 +23,57 @@ local PlayerState = require("Clicker.PlayerState")
 
 local ControllerRegistry = {}
 
----@param state PlayerGameState
-local function initialize_state(state)
-    ClickerController.initialize_state(state)
-end
-
----@param application Application
-local function initialize_clicker(application)
-    ClickerController.initialize(application.register_trigger, application.sessions.find_by_role)
-
-    application.register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.PASSIVE_INCOME_INTERVAL) },
-        function()
-            application.sessions.for_each(ClickerController.tick_passive_income)
-        end
-    )
-
-    application.register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.COMBO_INTERVAL) },
-        function()
-            application.sessions.for_each(ClickerController.tick_combo_decay)
-        end
-    )
-end
-
----@param application Application
-local function initialize_booth(application)
-    BoothController.initialize(application.register_trigger)
-
-    application.register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.INCOME_TICK_INTERVAL) },
-        function()
-            application.sessions.for_each(function(session)
-                BoothController.tick_income(session.role)
-            end)
-        end
-    )
-
-    application.register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.AUTOSAVE_INTERVAL) },
-        function()
-            application.sessions.for_each(function(session)
-                BoothController.save_now(session.role)
-            end)
-        end
-    )
-end
+-- 装配顺序：initialize / setup_session 按此正序，cleanup_session / shutdown 按逆序拆解。
+local controllers = {
+    ClickerController,
+    LotteryController,
+    MallController,
+    InventoryController,
+    BoothController,
+}
 
 ---@return PlayerGameState state
 function ControllerRegistry.create_player_state()
     local state = PlayerState.new()
-    initialize_state(state)
+    ClickerController.initialize_state(state)
     return state
 end
 
 ---@param application Application
 function ControllerRegistry.initialize_all(application)
-    initialize_clicker(application)
-    LotteryController.initialize(application.register_trigger)
-    MallController.initialize(application.register_trigger)
-    InventoryController.initialize(application.register_trigger)
-    initialize_booth(application)
+    for _, controller in ipairs(controllers) do
+        if controller.initialize then
+            controller.initialize(application)
+        end
+    end
 end
 
 ---@param session PlayerSession
 function ControllerRegistry.setup_session(session)
-    ClickerController.setup_session(session)
-    MallController.setup_session(session)
-    InventoryController.setup_session(session)
-    LotteryController.setup_session(session)
-    BoothController.setup_session(session)
+    for _, controller in ipairs(controllers) do
+        if controller.setup_session then
+            controller.setup_session(session)
+        end
+    end
 end
 
 ---@param session PlayerSession
 function ControllerRegistry.cleanup_session(session)
-    ClickerController.cleanup_session(session)
-    LotteryController.cleanup_session(session)
-    BoothController.cleanup_session(session)
+    for index = #controllers, 1, -1 do
+        local controller = controllers[index]
+        if controller.cleanup_session then
+            controller.cleanup_session(session)
+        end
+    end
 end
 
 function ControllerRegistry.shutdown_all()
-    ClickerController.shutdown()
+    for index = #controllers, 1, -1 do
+        local controller = controllers[index]
+        if controller.shutdown then
+            controller.shutdown()
+        end
+    end
 end
 
 return ControllerRegistry

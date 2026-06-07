@@ -177,9 +177,9 @@ function ClickerController.tick_combo_decay(session)
     render_combo_update(session, ComboSystem.decay(session.state))
 end
 
----@param register_trigger fun(event_arguments: table, callback: function): integer
----@param session_finder fun(role: Role): PlayerSession|nil
-function ClickerController.initialize(register_trigger, session_finder)
+---@param application Application
+function ClickerController.initialize(application)
+    local register_trigger = application.register_trigger
     local world_canvas = UINodes[AppConfig.APP.canvases.world]
     local click_canvas = UINodes[AppConfig.APP.canvases.click]
     if not click_canvas then
@@ -189,7 +189,7 @@ function ClickerController.initialize(register_trigger, session_finder)
 
     launch_button = GameAPI.get_eui_child_by_name(world_canvas, ClickerConfig.BUTTONS.launch)
     exit_button = GameAPI.get_eui_child_by_name(click_canvas, ClickerConfig.BUTTONS.exit)
-    find_session = session_finder
+    find_session = application.sessions.find_by_role
 
     CharacterView.initialize(click_canvas)
     HeadsUpDisplay.initialize(click_canvas)
@@ -198,6 +198,20 @@ function ClickerController.initialize(register_trigger, session_finder)
     ComboBar.initialize(click_canvas)
 
     bind_ui_interactions(register_trigger)
+
+    -- 被动收益与连击衰减定时器（自注册：间隔/回调/会话遍历都收归本控制器）
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.PASSIVE_INCOME_INTERVAL) },
+        function()
+            application.sessions.for_each(ClickerController.tick_passive_income)
+        end
+    )
+    register_trigger(
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.COMBO_INTERVAL) },
+        function()
+            application.sessions.for_each(ClickerController.tick_combo_decay)
+        end
+    )
 end
 
 ---@param state PlayerGameState

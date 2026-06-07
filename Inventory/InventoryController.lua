@@ -31,8 +31,9 @@ function InventoryController.initialize_role(role)
 end
 
 ---绑定背包侧边栏所有交互。GAME_INIT 时由 GameApp 调用。
----@param register_trigger fun(event_arguments: table, callback: function): integer
-function InventoryController.initialize(register_trigger)
+---@param application Application
+function InventoryController.initialize(application)
+    local register_trigger = application.register_trigger
     InventoryView.initialize()
     InventoryView.bind_tab_handler(handle_select, register_trigger)
     LuaAPI.log("[InventoryController] 背包侧边栏初始化完成", 0)

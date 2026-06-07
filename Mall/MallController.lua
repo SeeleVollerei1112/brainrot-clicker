@@ -78,8 +78,9 @@ function MallController.initialize_role(role)
 end
 
 ---绑定商城所有交互。GAME_INIT 时由 GameApp 调用。
----@param register_trigger fun(event_arguments: table, callback: function): integer
-function MallController.initialize(register_trigger)
+---@param application Application
+function MallController.initialize(application)
+    local register_trigger = application.register_trigger
     MallView.initialize()
 
     -- 入口按钮（世界画布的 btn_shop）：打开商城

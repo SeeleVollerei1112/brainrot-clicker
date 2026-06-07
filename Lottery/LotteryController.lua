@@ -61,8 +61,9 @@ local function handle_close(role)
 end
 
 ---绑定转盘画布的开关导航与抽奖按钮。
----@param register_trigger fun(event_arguments: table, callback: function): integer
-function LotteryController.initialize(register_trigger)
+---@param application Application
+function LotteryController.initialize(application)
+    local register_trigger = application.register_trigger
     LotteryView.initialize()
 
     -- 世界画布的入口按钮：点击弹出转盘画布
