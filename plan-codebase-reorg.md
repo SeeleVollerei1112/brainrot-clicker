@@ -84,7 +84,7 @@
 - [x] 删除 `BoothController` 中 `submodules()` 延迟 require + 缓存特例
 - [x] Booth 仍为 7 文件，结构不变
 - [x] commit：`refactor: Booth 子模块改依赖注入，消除循环依赖`
-- [ ] **附带 bug 修复（与用户对齐中）**：解锁展台区后展台模型无物理体积 —— 现状 `unlock_stand` 已调 `set_physics_active(true)`，待定位真实成因后修
+- [x] **附带 bug 修复**：解锁展台区后展台无碰撞体积。运行时探针定位真因——展台是组件组(UnitGroup)，`set_physics_active(false)` 不可逆 + `set_model_visible(false)` 不屏蔽碰撞。改用「位置」可逆杠杆：锁定下沉移走静态组件组、解锁移回原位，物理不动。已跑测通过。commit：`fix: 修复解锁展台区后展台无碰撞体积`
 
 **验收**：WHEN 放置 / 回收 / 解锁展区 / 触发离线收益，THEN 行为与重构前一致，无半初始化模块报错。
 
@@ -145,6 +145,6 @@
 | 1 | 删除 dkjson | ✅ 已完成 (884a955) | 无 |
 | 2 | AppConfig 事件归位 | ✅ 已完成 (67a0efe) | 无 |
 | 3 | 定时器自注册 + Registry 退化 | ✅ 已完成 | 无 |
-| 4 | Booth 去循环依赖 | ✅ 去环已完成（物理 bug 待对齐） | 模块 3 |
+| 4 | Booth 去循环依赖 + 物理 bug | ✅ 已完成（去环 + 碰撞修复均跑测通过） | 模块 3 |
 | 5 | Clicker 合并消肿 | ⬜ 未开始 | 模块 2、3 |
 | 6 | 命名收尾 + 一致性核查 | ⬜ 未开始 | 模块 1~5 |
