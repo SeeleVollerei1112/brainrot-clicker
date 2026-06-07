@@ -57,13 +57,13 @@
 **风险**：中（动装配核心）
 
 **子任务**：
-- [ ] 统一 Controller 接口：`initialize(application)`；可选钩子 `setup_session / cleanup_session / shutdown`
-- [ ] `ClickerController.initialize` 内自注册 被动收益 tick + 连击衰减 tick（用 `application.sessions.for_each`）
-- [ ] `BoothController.initialize` 内自注册 收益结算 tick + 自动存档 tick
-- [ ] `ControllerRegistry` 改为 `controllers = { Clicker, Lottery, Mall, Inventory, Booth }` 列表 + 循环调用各生命周期钩子（钩子缺省时安全跳过）
-- [ ] 保留 `create_player_state`（委托给 Clicker 构建 `session.state`）
-- [ ] 删除 `initialize_clicker / initialize_booth` 特例函数
-- [ ] commit：`refactor: 各控制器自注册定时器，ControllerRegistry 退化为列表`
+- [x] 统一 Controller 接口：`initialize(application)`；可选钩子 `setup_session / cleanup_session / shutdown`
+- [x] `ClickerController.initialize` 内自注册 被动收益 tick + 连击衰减 tick（用 `application.sessions.for_each`）
+- [x] `BoothController.initialize` 内自注册 收益结算 tick + 自动存档 tick
+- [x] `ControllerRegistry` 改为 `controllers = { Clicker, Lottery, Mall, Inventory, Booth }` 列表 + 循环调用各生命周期钩子（钩子缺省时安全跳过；init/setup 正序，cleanup/shutdown 逆序）
+- [x] 保留 `create_player_state`（委托给 Clicker 构建 `session.state`）
+- [x] 删除 `initialize_clicker / initialize_booth` 特例函数
+- [x] commit：`refactor: 各控制器自注册定时器，ControllerRegistry 退化为列表`
 
 **验收**：
 - WHEN 挂机一段时间，THEN 被动收益、连击衰减按原节奏发生
@@ -79,11 +79,12 @@
 **风险**：中
 
 **子任务**：
-- [ ] 设计注入面：`BoothController` 暴露被子模块调用的状态访问/变更（`get_state / get_placement / place_item / remove_item` 等），在 `initialize` 时注入 `BoothPlacement` / `BoothZoneView`
-- [ ] `BoothPlacement` / `BoothZoneView` 删除顶层 `require("Booth.BoothController")`，改用注入引用
-- [ ] 删除 `BoothController` 中 `submodules()` 延迟 require + 缓存特例
-- [ ] Booth 仍为 7 文件，结构不变
-- [ ] commit：`refactor: Booth 子模块改依赖注入，消除循环依赖`
+- [x] 设计注入面：`BoothController` 暴露被子模块调用的状态访问/变更（`get_state / get_placement / place_item / remove_item`），加载期通过 `.bind` 注入 `BoothPlacement` / `BoothZoneView`
+- [x] `BoothPlacement` / `BoothZoneView` 删除顶层 `require("Booth.BoothController")`，改用注入的 `controller`
+- [x] 删除 `BoothController` 中 `submodules()` 延迟 require + 缓存特例
+- [x] Booth 仍为 7 文件，结构不变
+- [x] commit：`refactor: Booth 子模块改依赖注入，消除循环依赖`
+- [ ] **附带 bug 修复（与用户对齐中）**：解锁展台区后展台模型无物理体积 —— 现状 `unlock_stand` 已调 `set_physics_active(true)`，待定位真实成因后修
 
 **验收**：WHEN 放置 / 回收 / 解锁展区 / 触发离线收益，THEN 行为与重构前一致，无半初始化模块报错。
 
@@ -143,7 +144,7 @@
 |------|------|------|------|
 | 1 | 删除 dkjson | ✅ 已完成 (884a955) | 无 |
 | 2 | AppConfig 事件归位 | ✅ 已完成 (67a0efe) | 无 |
-| 3 | 定时器自注册 + Registry 退化 | ⬜ 未开始 | 无 |
-| 4 | Booth 去循环依赖 | ⬜ 未开始 | 模块 3 |
+| 3 | 定时器自注册 + Registry 退化 | ✅ 已完成 | 无 |
+| 4 | Booth 去循环依赖 | ✅ 去环已完成（物理 bug 待对齐） | 模块 3 |
 | 5 | Clicker 合并消肿 | ⬜ 未开始 | 模块 2、3 |
 | 6 | 命名收尾 + 一致性核查 | ⬜ 未开始 | 模块 1~5 |
