@@ -1,5 +1,5 @@
 --[[
-UpgradeShop/UpgradeShopView.lua
+Clicker/UpgradeShop/UpgradeShopView.lua
 
 升级商店表现层。
 静态节点由编辑器搭好，业务层只传入展示数据，本文件负责绑定节点、渲染文本与触摸状态。

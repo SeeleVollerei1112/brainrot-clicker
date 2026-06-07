@@ -97,14 +97,13 @@
 **风险**：中（多文件合并 + require 路径变更）
 
 **子任务**：
-- [ ] 新建 `Clicker/ClickerState.lua`：合并 `PlayerState + CurrencySystem + ComboSystem + SkinSystem`（状态树 + 纯逻辑；`PlayerGameState` 等 luadoc 类名**保持不变**以免改散落注解）
-- [ ] 新建 `Clicker/ClickerView.lua`：合并 `CharacterView + FloatTextView + HeadsUpDisplay + ComboBar`（"点击展示"）
-- [ ] `ComboConfig` 并入 `ClickerConfig.COMBO`；删除顶层 `Combo/` 文件夹
-- [ ] `UpgradeShop/` 下沉为 `Clicker/UpgradeShop/`（`UpgradeShopConfig / UpgradeShopSystem / UpgradeShopView`，`UpgradeShopPanel → UpgradeShopView`）；删除顶层 `UpgradeShop/`
-- [ ] 改写 `ClickerController`：改用合并后模块，简化 wiring（初始化 5 个 view → 1 个）
-- [ ] 更新所有相关 `require` 路径
-- [ ] 删除被合并的旧文件
-- [ ] commit：`refactor: Clicker 模块合并消肿，Combo/UpgradeShop 下沉`
+- [x] 新建 `Clicker/ClickerState.lua`：合并 `PlayerState + CurrencySystem + ComboSystem + SkinSystem`（`PlayerGameState` 类名保持不变）
+- [x] 新建 `Clicker/ClickerView.lua`：合并 `CharacterView + FloatTextView + HeadsUpDisplay + ComboBar`（"点击展示"）
+- [x] `ComboConfig` 并入 `ClickerConfig.COMBO`；删除顶层 `Combo/` 文件夹
+- [x] `UpgradeShop/` 下沉为 `Clicker/UpgradeShop/`（`UpgradeShopPanel → UpgradeShopView`）；删除顶层 `UpgradeShop/`
+- [x] 改写 `ClickerController`：改用合并后模块，初始化 5 个 view → 2 个（ClickerView + UpgradeShopView）
+- [x] 更新所有相关 `require` 路径，删除被合并的旧文件
+- [x] 拆成 3 个各自可运行的子提交（5a 下沉 / 5b 逻辑合并 / 5c 表现合并），跑测验证 GameApp 初始化无报错、用户确认玩法正常
 
 **风险点**：`ClickerView` 约 700 行；跑测后若过胖，二次切分为 `CharacterView` 单独留 + 小 `ClickerHudView`（HUD + 连击条）。决策记录于本步。
 
@@ -122,10 +121,10 @@
 **风险**：低
 
 **子任务**：
-- [ ] 核查命名符合范式：顶层功能 `<Feature>Controller / <Feature>Config`，其余 `<概念><角色>`
-- [ ] 全库 grep 核查无失效 `require` 路径、无悬挂引用
-- [ ] 更新 / 校对入口与 README 级注释（如有）
-- [ ] commit：`refactor: 命名与 require 路径一致性收尾`
+- [x] 核查命名符合范式：顶层功能 `<Feature>Controller / <Feature>Config`，其余 `<概念><角色>`
+- [x] 全库 grep 核查无失效 `require` 路径、无悬挂引用（require 图全部解析）
+- [x] 校对移动/合并后文件头注释路径（UpgradeShop 三件 → `Clicker/UpgradeShop/...`）
+- [x] commit：`refactor: 命名与文件头路径一致性收尾`
 
 **验收**：WHEN 完整跑测一轮（点击 / 商店 / 抽奖 / 商城 / 背包 / 展台 / 离线收益），THEN 全功能正常、零报错。
 
@@ -146,5 +145,5 @@
 | 2 | AppConfig 事件归位 | ✅ 已完成 (67a0efe) | 无 |
 | 3 | 定时器自注册 + Registry 退化 | ✅ 已完成 | 无 |
 | 4 | Booth 去循环依赖 + 物理 bug | ✅ 已完成（去环 + 碰撞修复均跑测通过） | 模块 3 |
-| 5 | Clicker 合并消肿 | ⬜ 未开始 | 模块 2、3 |
-| 6 | 命名收尾 + 一致性核查 | ⬜ 未开始 | 模块 1~5 |
+| 5 | Clicker 合并消肿 (14→7) | ✅ 已完成（5a/5b/5c，用户验证通过） | 模块 2、3 |
+| 6 | 命名收尾 + 一致性核查 | ✅ 已完成 | 模块 1~5 |
