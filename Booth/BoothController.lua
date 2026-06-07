@@ -20,16 +20,18 @@ local BoothController = {}
 BoothController.INCOME_TICK_INTERVAL = BoothConfig.INCOME_TICK_INTERVAL
 BoothController.AUTOSAVE_INTERVAL = BoothConfig.AUTOSAVE_INTERVAL
 
--- 编排的子模块（场景表现层 / 交互层 / 放置层）。这些子模块反过来 require 本控制器，
--- 为避免加载期循环依赖拿到半初始化的模块表，这里延迟到首次使用时再 require 并缓存。
-local BoothZoneView, BoothInteraction, BoothPlacement
+-- 编排的子模块（场景表现层 / 交互层 / 放置层）。子模块不反向 require 本控制器，
+-- 而是在 initialize 时由本控制器把自身（状态读写门面）注入（见各子模块 .bind）。
+-- 因此这里可直接顶层 require，不存在加载期循环依赖。
+local BoothZoneView = require("Booth.BoothZoneView")
+local BoothInteraction = require("Booth.BoothInteraction")
+local BoothPlacement = require("Booth.BoothPlacement")
 
-local function submodules()
-    BoothZoneView = BoothZoneView or require("Booth.BoothZoneView")
-    BoothInteraction = BoothInteraction or require("Booth.BoothInteraction")
-    BoothPlacement = BoothPlacement or require("Booth.BoothPlacement")
-    return BoothZoneView, BoothInteraction, BoothPlacement
-end
+-- 把本控制器（状态读写门面）注入需要它的子模块，替代它们反向 require。
+-- 加载期即注入：BoothController 表已创建，子模块按 controller.xxx 在调用时解析，
+-- 此时方法均已挂载；这样即便 initialize 之前被调用（如 DebugTools）也安全。
+BoothZoneView.bind(BoothController)
+BoothPlacement.bind(BoothController)
 
 ---@type table<RoleID, BoothState>
 local state_by_role_id = {}
@@ -46,9 +48,9 @@ end
 ---@param application Application
 function BoothController.initialize(application)
     local register_trigger = application.register_trigger
-    local zone_view, interaction = submodules()
-    zone_view.initialize()
-    interaction.initialize(register_trigger)
+
+    BoothZoneView.initialize()
+    BoothInteraction.initialize(register_trigger)
 
     -- 收益结算定时器：仅内存累加 + 刷新公告板
     register_trigger(
@@ -86,10 +88,9 @@ function BoothController.setup_session(session)
     -- 离线收益结算放在刷新展现之前，让公告板直接显示结算后的总收益。
     local offline_gain, offline_sec = BoothController.settle_offline(role, state)
 
-    local zone_view, interaction, placement = submodules()
-    interaction.initialize_role(role)
-    placement.spawn_saved(role)
-    zone_view.refresh_all(role)
+    BoothInteraction.initialize_role(role)
+    BoothPlacement.spawn_saved(role)
+    BoothZoneView.refresh_all(role)
 
     if offline_gain > 0 and offline_sec >= (BoothConfig.OFFLINE.min_notify_seconds or 0) then
         role.show_tips("欢迎回来，离线收益 +" .. tostring(offline_gain))
@@ -110,10 +111,9 @@ function BoothController.cleanup_session(session)
         return
     end
 
-    local zone_view, interaction, placement = submodules()
-    placement.clear_role(role)
-    interaction.cleanup_role(role)
-    zone_view.clear_labels(role)
+    BoothPlacement.clear_role(role)
+    BoothInteraction.cleanup_role(role)
+    BoothZoneView.clear_labels(role)
 
     local state = state_by_role_id[role_id]
     if state then
@@ -203,12 +203,11 @@ function BoothController.tick_income(role)
         return
     end
 
-    local zone_view = submodules()
     for _, zone in ipairs(BoothConfig.ZONES) do
         if BoothState.is_zone_unlocked(state, zone.id) then
-            zone_view.refresh_board(role, zone.id)
+            BoothZoneView.refresh_board(role, zone.id)
             for booth_index = 0, zone.booth_count - 1 do
-                zone_view.refresh_booth_label(role, zone.id, booth_index)
+                BoothZoneView.refresh_booth_label(role, zone.id, booth_index)
             end
         end
     end
@@ -237,8 +236,7 @@ function BoothController.unlock_zone(role, zone_id)
         return false
     end
     BoothPersistence.save(role, state)
-    local zone_view = submodules()
-    zone_view.refresh_zone(role, zone_id)
+    BoothZoneView.refresh_zone(role, zone_id)
     return true
 end
 
@@ -252,8 +250,7 @@ function BoothController.lock_zone(role, zone_id)
         return false
     end
     BoothPersistence.save(role, state)
-    local zone_view = submodules()
-    zone_view.refresh_zone(role, zone_id)
+    BoothZoneView.refresh_zone(role, zone_id)
     return true
 end
 
@@ -286,8 +283,7 @@ function BoothController.try_unlock_zone(role, zone_id, spend_fn)
 
     BoothState.unlock_zone(state, zone_id)
     BoothPersistence.save(role, state)
-    local zone_view = submodules()
-    zone_view.refresh_zone(role, zone_id)
+    BoothZoneView.refresh_zone(role, zone_id)
     return true, "ok"
 end
 

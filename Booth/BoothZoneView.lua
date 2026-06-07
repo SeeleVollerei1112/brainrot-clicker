@@ -15,12 +15,21 @@ BoothConfig 的命名规则通过 LuaAPI.query_unit 查询并缓存。
 ]]
 
 local BoothConfig = require("Booth.BoothConfig")
-local BoothController = require("Booth.BoothController")
 local BoothState = require("Booth.BoothState")
 local PrefabData = require("Data.Prefab")
 local UINodes = require("Data.UINodes")
 
 local BoothZoneView = {}
+
+-- 状态读写门面，由 BoothController 在初始化时注入（替代反向 require，消除循环依赖）。
+---@type table
+local controller
+
+---注入展台控制器（提供 get_state）。
+---@param booth_controller table
+function BoothZoneView.bind(booth_controller)
+    controller = booth_controller
+end
 
 local COLOR_LOCKED = 0xFFFF3030
 local COLOR_UNLOCKED = 0xFFFFFFFF
@@ -143,7 +152,7 @@ end
 ---@param zone_id integer
 ---@return integer income_per_second, integer income_total
 function BoothZoneView.compute_zone_income(role, zone_id)
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     if not state then
         return 0, 0
     end
@@ -229,7 +238,7 @@ end
 function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
     local key = slot_key(zone_id, booth_index)
 
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     local placement = state and BoothState.get_placement(state, zone_id, booth_index)
     local unlocked = state and BoothState.is_zone_unlocked(state, zone_id)
     if not placement or not unlocked then
@@ -289,7 +298,7 @@ function BoothZoneView.refresh_board(role, zone_id)
         return
     end
 
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     local unlocked = state and BoothState.is_zone_unlocked(state, zone_id)
     if unlocked then
         local per_second, total = BoothZoneView.compute_zone_income(role, zone_id)
@@ -305,7 +314,7 @@ end
 ---@param role Role
 ---@param zone_id integer
 function BoothZoneView.refresh_zone(role, zone_id)
-    local state = BoothController.get_state(role)
+    local state = controller.get_state(role)
     local unlocked = BoothState.is_zone_unlocked(state, zone_id)
 
     resolve_zone_units(zone_id)
