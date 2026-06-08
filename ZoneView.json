@@ -1,0 +1,41 @@
+{
+    "booth_income": {
+        "1": {
+            "2": 225
+        },
+        "2": {
+            "2": 0
+        }
+    },
+    "last_ts": 1780881952,
+    "placements": {
+        "1": {
+            "2": {
+                "attrs": {
+                    "income_per_second": 45,
+                    "level": 1,
+                    "name": "脑红5"
+                },
+                "item_id": 105
+            }
+        },
+        "2": {
+            "2": {
+                "attrs": {
+                    "income_per_second": 18,
+                    "level": 1,
+                    "name": "脑红4"
+                },
+                "item_id": 104
+            }
+        }
+    },
+    "zone_income": {
+        "1": 225
+    },
+    "zones": [
+        1,
+        2,
+        3
+    ]
+}

@@ -5,6 +5,7 @@
 -- ============================================================
 
 local InventoryView = require("Inventory.InventoryView")
+local ItemSynthesisSystem = require("Inventory.ItemSynthesisSystem")
 
 local InventoryController = {}
 
@@ -34,6 +35,7 @@ end
 ---@param application Application
 function InventoryController.initialize(application)
     local register_trigger = application.register_trigger
+    ItemSynthesisSystem.initialize()
     InventoryView.initialize()
     InventoryView.bind_tab_handler(handle_select, register_trigger)
     LuaAPI.log("[InventoryController] 背包侧边栏初始化完成", 0)

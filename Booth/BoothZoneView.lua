@@ -238,7 +238,7 @@ local function set_head_text(layer, level, income_per_second, income_total)
             role.set_label_outline_width(income_node, to_fixed(style.outline_width or 2))
         end
         if total_node then
-            role.set_label_text(total_node, (style.total_prefix or "累计 ") .. tostring(income_total))
+            role.set_label_text(total_node, (style.total_prefix or "") .. tostring(income_total))
             role.set_label_color(total_node, style.total_color or 0xFFFFFFFF, to_fixed(0))
             role.set_label_font_size(total_node, style.total_font_size or 44, to_fixed(0))
             role.set_label_background_opacity(total_node, to_fixed(style.label_background_opacity or 0.0), to_fixed(0))
