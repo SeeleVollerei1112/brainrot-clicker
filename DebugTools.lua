@@ -89,3 +89,198 @@ function UnlockBoothZone(role_id, zone_id)
 		role.show_tips("展区解锁失败: " .. tostring(zone_id))
 	end
 end
+
+local function debug_get_role(role_id)
+	local role = GameAPI.get_role(role_id)
+	if not role then
+		return nil
+	end
+	return role
+end
+
+local function debug_copy_attrs(attrs)
+	local result = {}
+	if attrs then
+		for key, value in pairs(attrs) do
+			result[key] = value
+		end
+	end
+	return result
+end
+
+local function debug_level_income(base_income, level)
+	local income = math.tointeger(base_income) or 0
+	local target_level = math.tointeger(level) or 1
+	local current_level = 1
+	while current_level < target_level do
+		income = income * 2
+		current_level = current_level + 1
+	end
+	return income
+end
+
+---@export_plugin
+---@style button
+---@desc 调试发放脑红合成材料
+---@param role_id RoleID 玩家ID
+---@param item_id integer 物品ID
+---@param level integer 等级(<=0默认1)
+---@param count integer 数量(<=0默认1)
+function GiveBoothSynthesisItem(role_id, item_id, level, count)
+	local role = debug_get_role(role_id)
+	if not role then
+		return
+	end
+
+	local BoothConfig = require("Booth.BoothConfig")
+	local ItemSynthesisSystem = require("Inventory.ItemSynthesisSystem")
+	local item = BoothConfig.find_item(item_id)
+	if not item then
+		role.show_tips("发放失败: 未配置物品 " .. tostring(item_id))
+		return
+	end
+
+	local attrs = debug_copy_attrs(item.base_attrs)
+	local output_level = math.tointeger(level) or 1
+	if output_level <= 0 then
+		output_level = 1
+	end
+	attrs.level = output_level
+	attrs.income_per_second = debug_level_income(attrs.income_per_second or 0, output_level)
+
+	local output_count = math.tointeger(count) or 1
+	if output_count <= 0 then
+		output_count = 1
+	end
+	ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, output_count, { "EQUIPPED", "BACKPACK" })
+	role.show_tips("已发放合成材料 item=" .. tostring(item_id)
+		.. " Lv." .. tostring(output_level)
+		.. " x" .. tostring(output_count))
+end
+
+---@export_plugin
+---@style button
+---@desc 执行脑红物品合成
+---@param role_id RoleID 玩家ID
+---@param item_id integer 物品ID(<=0自动匹配)
+---@param level integer 等级(<=0自动匹配)
+function SynthesizeBoothItem(role_id, item_id, level)
+	local role = debug_get_role(role_id)
+	if not role then
+		return
+	end
+
+	local ItemSynthesisSystem = require("Inventory.ItemSynthesisSystem")
+	local result = ItemSynthesisSystem.synthesize(role, item_id, level)
+	if result.success then
+		role.show_tips("合成成功: item=" .. tostring(result.item_id)
+			.. " Lv." .. tostring(result.level)
+			.. " 收益=" .. tostring(result.income_per_second) .. "/s")
+	else
+		role.show_tips("合成失败: " .. tostring(result.reason))
+	end
+end
+
+---@export_plugin
+---@style button
+---@desc 检测脑红合成功能
+---@param role_id RoleID 玩家ID
+---@param item_id integer 物品ID
+function TestBoothItemSynthesis(role_id, item_id)
+	local role = debug_get_role(role_id)
+	if not role then
+		return
+	end
+
+	local BoothConfig = require("Booth.BoothConfig")
+	local ItemSynthesisSystem = require("Inventory.ItemSynthesisSystem")
+	local item = BoothConfig.find_item(item_id)
+	if not item then
+		role.show_tips("合成检测失败: 未配置物品 " .. tostring(item_id))
+		return
+	end
+
+	local attrs = debug_copy_attrs(item.base_attrs)
+	attrs.level = math.tointeger(attrs.level or 1) or 1
+	attrs.income_per_second = math.tointeger(attrs.income_per_second or 0) or 0
+
+	ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, 2, { "EQUIPPED", "BACKPACK" })
+
+	local result = ItemSynthesisSystem.synthesize(role, item_id, attrs.level)
+	local expected_level = attrs.level + 1
+	local expected_income = attrs.income_per_second * 2
+	if result.success
+		and result.level == expected_level
+		and result.income_per_second == expected_income then
+		role.show_tips("合成检测通过: Lv." .. tostring(result.level)
+			.. " 收益=" .. tostring(result.income_per_second) .. "/s")
+	else
+		role.show_tips("合成检测失败: reason=" .. tostring(result.reason)
+			.. " level=" .. tostring(result.level)
+			.. " income=" .. tostring(result.income_per_second))
+	end
+end
+
+---@export_plugin
+---@style button
+---@desc 检测合成后展台收益同步
+---@param role_id RoleID 玩家ID
+---@param zone_id integer 展区ID
+---@param booth_index integer 展台索引(从0开始)
+---@param item_id integer 物品ID
+function TestBoothSynthesisBoardSync(role_id, zone_id, booth_index, item_id)
+	local role = debug_get_role(role_id)
+	if not role then
+		return
+	end
+
+	local BoothConfig = require("Booth.BoothConfig")
+	local BoothController = require("Booth.BoothController")
+	local BoothPlacement = require("Booth.BoothPlacement")
+	local BoothState = require("Booth.BoothState")
+	local BoothZoneView = require("Booth.BoothZoneView")
+	local ItemSynthesisSystem = require("Inventory.ItemSynthesisSystem")
+
+	local item = BoothConfig.find_item(item_id)
+	if not item then
+		role.show_tips("展台合成检测失败: 未配置物品 " .. tostring(item_id))
+		return
+	end
+	if not BoothConfig.is_valid_booth(zone_id, booth_index) then
+		role.show_tips("展台合成检测失败: 展台位非法")
+		return
+	end
+	if BoothController.get_placement(role, zone_id, booth_index) then
+		role.show_tips("展台合成检测失败: 目标展台已占用")
+		return
+	end
+
+	BoothController.unlock_zone(role, zone_id)
+
+	local attrs = debug_copy_attrs(item.base_attrs)
+	attrs.level = math.tointeger(attrs.level or 1) or 1
+	attrs.income_per_second = math.tointeger(attrs.income_per_second or 0) or 0
+	ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, 2, { "EQUIPPED", "BACKPACK" })
+
+	local result = ItemSynthesisSystem.synthesize(role, item_id, attrs.level)
+	if not result.success then
+		role.show_tips("展台合成检测失败: 合成失败 " .. tostring(result.reason))
+		return
+	end
+
+	local placed, reason = BoothPlacement.place(role, zone_id, booth_index)
+	if not placed then
+		role.show_tips("展台合成检测失败: 放置失败 " .. tostring(reason))
+		return
+	end
+
+	BoothZoneView.refresh_zone(role, zone_id)
+	local state = BoothController.get_state(role)
+	local per_second = state and BoothState.zone_income_per_second(state, zone_id) or 0
+	if per_second >= result.income_per_second then
+		role.show_tips("展台合成检测通过: 展区每秒总收益=" .. tostring(per_second))
+	else
+		role.show_tips("展台合成检测失败: 展区收益=" .. tostring(per_second)
+			.. " 期望>=" .. tostring(result.income_per_second))
+	end
+end

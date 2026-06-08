@@ -10,7 +10,6 @@ local PlayerSessionRegistry = require("App.PlayerSessionRegistry")
 local TriggerRegistry = require("App.TriggerRegistry")
 
 ---@class PlayerSession
----@field role_id RoleID 玩家 ID
 ---@field role Role 玩家对象
 ---@field state PlayerGameState 玩家运行时状态
 ---@field click_canvas_open boolean 点击界面是否打开
@@ -28,7 +27,7 @@ local function register_role_exit_handler(role)
     TriggerRegistry.register(
         { EVENT.SPEC_ROLE_EXIT_GAME, role },
         function(event_name, actor, data)
-            GameApp.remove_player_session((data and data.role) or role)
+            GameApp.remove_player_session(data.role)
         end
     )
 end
@@ -36,20 +35,18 @@ end
 ---@param role Role
 ---@return PlayerSession|nil session
 function GameApp.get_or_create_player_session(role)
-    local role_id = PlayerSessionRegistry.get_role_id(role)
+    local control_unit = role and role.get_ctrl_unit()
+    local role_id = control_unit and control_unit.get_role_id() or nil
     if not role_id then
         LuaAPI.log("[GameApp] 无法获取 Role ID，跳过玩家会话创建", 1)
         return nil
     end
 
-    local session = PlayerSessionRegistry.find_by_role_id(role_id)
-    if session then
-        return session
-    end
+    local session = PlayerSessionRegistry.find_by_role(role)
+    if session then return session end
 
     local state = ControllerRegistry.create_player_state()
     session = {
-        role_id = role_id,
         role = role,
         state = state,
         click_canvas_open = false,
@@ -64,19 +61,17 @@ end
 
 ---@param role Role
 function GameApp.remove_player_session(role)
+    local control_unit = role and role.get_ctrl_unit()
+    local role_id = control_unit and control_unit.get_role_id() or nil
     local session = PlayerSessionRegistry.remove_by_role(role)
-    if not session then
-        return
-    end
+    if not session then return end
 
     ControllerRegistry.cleanup_session(session)
-    LuaAPI.log("[GameApp] 玩家会话已移除: " .. tostring(session.role_id), 0)
+    LuaAPI.log("[GameApp] 玩家会话已移除: " .. tostring(role_id), 0)
 end
 
 function GameApp.initialize()
-    if initialized then
-        GameApp.shutdown()
-    end
+    if initialized then GameApp.shutdown() end
 
     local application = {
         register_trigger = TriggerRegistry.register,

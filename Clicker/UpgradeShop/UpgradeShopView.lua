@@ -8,6 +8,7 @@ Clicker/UpgradeShop/UpgradeShopView.lua
 local UpgradeShopView = {}
 local UpgradeShopConfig = require("Clicker.UpgradeShop.UpgradeShopConfig")
 local AppConfig = require("App.AppConfig")
+local UINodes = require("Data.UINodes")
 local configuration = UpgradeShopConfig.UI
 local node_names = configuration.nodes
 local colors = configuration.colors
@@ -21,15 +22,15 @@ local title_label = nil
 local click_power_label = nil
 
 ---@param node any
----@return boolean valid
+---@return boolean
 local function is_node(node)
     return node ~= nil and node ~= false and node ~= 0 and node ~= ""
 end
 
----@param value number
----@return string formatted_value
-local function format_integer(value)
-    return tostring(math.tointeger(value) or 0)
+---@param name string
+---@return ENode|nil node
+local function exported_node(name)
+    return UINodes[name] or UINodes[name .. "_1"]
 end
 
 ---@param parent ENode
@@ -37,7 +38,7 @@ end
 ---@param required boolean
 ---@return ENode|nil node
 local function fetch_child(parent, name, required)
-    if not is_node(parent) then
+    if not parent then
         if required then
             LuaAPI.log("[UpgradeShopView] 缺少父节点，无法获取: " .. name, 1)
         end
@@ -45,7 +46,7 @@ local function fetch_child(parent, name, required)
     end
 
     local node = GameAPI.get_eui_child_by_name(parent, name)
-    if not is_node(node) then
+    if not node then
         if required then
             LuaAPI.log("[UpgradeShopView] 缺少静态节点: " .. name, 1)
         end
@@ -54,41 +55,34 @@ local function fetch_child(parent, name, required)
     return node
 end
 
----@param target_nodes ENode[]
----@param node ENode|nil
-local function append_node(target_nodes, node)
-    if is_node(node) then
-        table.insert(target_nodes, node)
-    end
-end
-
 ---@param role Role
 ---@param card table
 local function set_card_text_style(role, card)
     local to_fixed = math.tofixed
-    role.set_label_color(card.name, colors.text_dark, to_fixed(0))
-    role.set_label_color(card.description, colors.text_dark, to_fixed(0))
-    role.set_label_color(card.price, colors.text_dark, to_fixed(0))
-    role.set_label_color(card.level, colors.text_blue, to_fixed(0))
-    role.set_label_font_size(card.name, label_configuration.name_size, to_fixed(0))
-    role.set_label_font_size(card.description, label_configuration.desc_size, to_fixed(0))
-    role.set_label_font_size(card.price, label_configuration.price_size, to_fixed(0))
-    role.set_label_font_size(card.level, label_configuration.level_size, to_fixed(0))
-    role.set_label_outline_enabled(card.name, false)
-    role.set_label_outline_enabled(card.description, false)
-    role.set_label_outline_enabled(card.price, false)
-    role.set_label_outline_enabled(card.level, false)
-    role.set_label_shadow_enabled(card.name, false)
-    role.set_label_shadow_enabled(card.description, false)
-    role.set_label_shadow_enabled(card.price, false)
-    role.set_label_shadow_enabled(card.level, false)
-end
-
----@param role Role
----@param card table
----@param color integer
-local function set_card_background_color(role, card, color)
-    role.set_image_color(card.background, color, math.tofixed(0))
+    if is_node(card.name) then
+        role.set_label_color(card.name, colors.text_dark, to_fixed(0))
+        role.set_label_font_size(card.name, label_configuration.name_size, to_fixed(0))
+        role.set_label_outline_enabled(card.name, false)
+        role.set_label_shadow_enabled(card.name, false)
+    end
+    if is_node(card.description) then
+        role.set_label_color(card.description, colors.text_dark, to_fixed(0))
+        role.set_label_font_size(card.description, label_configuration.desc_size, to_fixed(0))
+        role.set_label_outline_enabled(card.description, false)
+        role.set_label_shadow_enabled(card.description, false)
+    end
+    if is_node(card.price) then
+        role.set_label_color(card.price, colors.text_dark, to_fixed(0))
+        role.set_label_font_size(card.price, label_configuration.price_size, to_fixed(0))
+        role.set_label_outline_enabled(card.price, false)
+        role.set_label_shadow_enabled(card.price, false)
+    end
+    if is_node(card.level) then
+        role.set_label_color(card.level, colors.text_blue, to_fixed(0))
+        role.set_label_font_size(card.level, label_configuration.level_size, to_fixed(0))
+        role.set_label_outline_enabled(card.level, false)
+        role.set_label_shadow_enabled(card.level, false)
+    end
 end
 
 ---@param role Role
@@ -129,8 +123,9 @@ end
 ---@param slot_index integer
 ---@return table|nil card
 local function bind_static_slot(slot_index)
-    local root = fetch_child(listview, node_names.item_prefix .. slot_index, false)
-    if not is_node(root) then
+    local root_name = node_names.item_prefix .. slot_index
+    local root = exported_node(root_name)
+    if not root then
         return nil
     end
 
@@ -138,26 +133,24 @@ local function bind_static_slot(slot_index)
     local card = {
         slot_index = slot_index,
         container = root,
-        background = fetch_child(root, node_names.card_prefix .. suffix, true),
-        slot = fetch_child(root, node_names.slot_prefix .. suffix, true),
-        icon = fetch_child(root, node_names.icon_prefix .. suffix, true),
-        name = fetch_child(root, node_names.name_prefix .. suffix, true),
-        description = fetch_child(root, node_names.desc_prefix .. suffix, true),
-        coin = fetch_child(root, node_names.coin_prefix .. suffix, true),
-        price = fetch_child(root, node_names.price_prefix .. suffix, true),
-        level = fetch_child(root, node_names.level_prefix .. suffix, true),
-        nodes = {},
+        background = exported_node(node_names.card_prefix .. suffix)
+            or fetch_child(root, node_names.card_prefix .. suffix, true),
+        slot = exported_node(node_names.slot_prefix .. suffix)
+            or fetch_child(root, node_names.slot_prefix .. suffix, true),
+        icon = exported_node(node_names.icon_prefix .. suffix)
+            or fetch_child(root, node_names.icon_prefix .. suffix, true),
+        name = exported_node(node_names.name_prefix .. suffix)
+            or fetch_child(root, node_names.name_prefix .. suffix, true),
+        description = exported_node(node_names.desc_prefix .. suffix)
+            or fetch_child(root, node_names.desc_prefix .. suffix, true),
+        coin = exported_node(node_names.coin_prefix .. suffix)
+            or fetch_child(root, node_names.coin_prefix .. suffix, true),
+        price = exported_node(node_names.price_prefix .. suffix)
+            or fetch_child(root, node_names.price_prefix .. suffix, true),
+        level = exported_node(node_names.level_prefix .. suffix)
+            or fetch_child(root, node_names.level_prefix .. suffix, true),
     }
 
-    append_node(card.nodes, card.container)
-    append_node(card.nodes, card.background)
-    append_node(card.nodes, card.slot)
-    append_node(card.nodes, card.icon)
-    append_node(card.nodes, card.name)
-    append_node(card.nodes, card.description)
-    append_node(card.nodes, card.coin)
-    append_node(card.nodes, card.price)
-    append_node(card.nodes, card.level)
     return card
 end
 
@@ -168,10 +161,15 @@ local function set_slot_visible(role, card, visible)
     if not role or not card then
         return
     end
-
-    for _, node in ipairs(card.nodes) do
-        role.set_node_visible(node, visible)
-    end
+    if is_node(card.container) then role.set_node_visible(card.container, visible) end
+    if is_node(card.background) then role.set_node_visible(card.background, visible) end
+    if is_node(card.slot) then role.set_node_visible(card.slot, visible) end
+    if is_node(card.icon) then role.set_node_visible(card.icon, visible) end
+    if is_node(card.coin) then role.set_node_visible(card.coin, visible) end
+    if is_node(card.name) then role.set_node_visible(card.name, visible) end
+    if is_node(card.description) then role.set_node_visible(card.description, visible) end
+    if is_node(card.price) then role.set_node_visible(card.price, visible) end
+    if is_node(card.level) then role.set_node_visible(card.level, visible) end
 end
 
 ---@param role Role
@@ -184,22 +182,22 @@ end
 ---绑定编辑器内已搭好的商店节点。
 ---@param canvas ENode
 function UpgradeShopView.initialize(canvas)
-    panel = fetch_child(canvas, node_names.panel, true)
+    panel = exported_node(node_names.panel) or fetch_child(canvas, node_names.panel, true)
     listview = nil
     cards_by_item_id = {}
     static_slots = {}
     title_label = nil
     click_power_label = nil
 
-    if not is_node(panel) then
+    if not panel then
         LuaAPI.log("[UpgradeShopView] 静态商城根节点不存在，跳过商城绑定", 1)
         return
     end
 
-    title_label = fetch_child(panel, node_names.title, true)
-    click_power_label = fetch_child(panel, node_names.number, true)
-    listview = fetch_child(panel, node_names.listview, true)
-    if not is_node(listview) then
+    title_label = exported_node(node_names.title) or fetch_child(panel, node_names.title, true)
+    click_power_label = exported_node(node_names.number) or fetch_child(panel, node_names.number, true)
+    listview = exported_node(node_names.listview) or fetch_child(panel, node_names.listview, true)
+    if not listview then
         LuaAPI.log("[UpgradeShopView] 静态商城列表节点不存在，跳过商城绑定", 1)
         return
     end
@@ -245,9 +243,15 @@ function UpgradeShopView.initialize_role(role)
         local card = cards_by_item_id[item_configuration.id]
         if card then
             set_slot_visible(role, card, true)
-            set_card_background_color(role, card, colors.card_ready)
-            role.set_image_color(card.slot, colors.coin, to_fixed(0))
-            role.set_node_touch_enabled(card.container, false)
+            if is_node(card.background) then
+                role.set_image_color(card.background, colors.card_ready, math.tofixed(0))
+            end
+            if is_node(card.slot) then
+                role.set_image_color(card.slot, colors.coin, to_fixed(0))
+            end
+            if is_node(card.container) then
+                role.set_node_touch_enabled(card.container, false)
+            end
             set_card_text_style(role, card)
             disable_card_child_touch(role, card)
         end
@@ -292,7 +296,7 @@ function UpgradeShopView.set_visible(role, visible)
     for slot_index, card in ipairs(static_slots) do
         local slot_visible = visible and slot_index <= #UpgradeShopConfig.ITEMS
         set_slot_visible(role, card, slot_visible)
-        if card.slot and card.icon then
+        if is_node(card.slot) and is_node(card.icon) then
             role.set_ui_opacity(card.slot,
                 to_fixed(slot_visible and opacity_configuration.visible or opacity_configuration.hidden))
             if not slot_visible then
@@ -313,51 +317,61 @@ function UpgradeShopView.render(role, display_data)
     local to_fixed = math.tofixed
     hide_unused_slots(role)
     if is_node(click_power_label) then
-        role.set_label_text(click_power_label, configuration.title_prefix .. format_integer(display_data.click_power))
+        role.set_label_text(click_power_label, configuration.title_prefix .. tostring(display_data.click_power))
     end
 
     for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local card = cards_by_item_id[item_configuration.id]
         local item_display_data = display_data.items[item_configuration.id]
         if card and item_display_data then
-            role.set_label_text(card.name, item_display_data.name)
-            role.set_label_text(card.description, item_display_data.description)
-            role.set_label_text(card.level, tostring(item_display_data.level))
+            if is_node(card.name) then role.set_label_text(card.name, item_display_data.name) end
+            if is_node(card.description) then role.set_label_text(card.description, item_display_data.description) end
+            if is_node(card.level) then role.set_label_text(card.level, tostring(item_display_data.level)) end
 
             -- 图标预设 icon_preset 为 nil 时沿用编辑器内的原贴图。
-            if item_display_data.icon_preset then
+            if item_display_data.icon_preset and is_node(card.icon) then
                 role.set_image_texture_by_key_with_auto_resize(card.icon, item_display_data.icon_preset, false)
             end
 
             if item_display_data.unlocked then
-                role.set_label_text(card.price, format_integer(item_display_data.price))
-                role.set_node_visible(card.coin, true)
+                if is_node(card.price) then role.set_label_text(card.price, tostring(item_display_data.price)) end
+                if is_node(card.coin) then role.set_node_visible(card.coin, true) end
             else
-                role.set_label_text(
-                    card.price,
-                    configuration.locked_price_prefix .. format_integer(item_display_data.unlock_total_brainrot)
-                )
-                role.set_node_visible(card.coin, false)
+                if is_node(card.price) then
+                    role.set_label_text(
+                        card.price,
+                        configuration.locked_price_prefix .. tostring(item_display_data.unlock_total_brainrot)
+                    )
+                end
+                if is_node(card.coin) then role.set_node_visible(card.coin, false) end
             end
 
             local at_max_level =
                 item_display_data.max_level and item_display_data.level >= item_display_data.max_level
             local enabled = item_display_data.can_buy and not at_max_level
-            role.set_node_touch_enabled(card.container, enabled)
+            if is_node(card.container) then role.set_node_touch_enabled(card.container, enabled) end
             if enabled then
-                set_card_background_color(role, card, colors.card_ready)
-                role.set_ui_opacity(card.icon, to_fixed(opacity_configuration.visible))
-                role.set_label_color(card.name, colors.text_dark, to_fixed(0))
-                role.set_label_color(card.description, colors.text_dark, to_fixed(0))
-                role.set_label_color(card.price, colors.text_dark, to_fixed(0))
-                role.set_label_color(card.level, colors.text_blue, to_fixed(0))
+                if is_node(card.background) then
+                    role.set_image_color(card.background, colors.card_ready, math.tofixed(0))
+                end
+                if is_node(card.icon) then role.set_ui_opacity(card.icon, to_fixed(opacity_configuration.visible)) end
+                if is_node(card.name) then role.set_label_color(card.name, colors.text_dark, to_fixed(0)) end
+                if is_node(card.description) then
+                    role.set_label_color(card.description, colors.text_dark, to_fixed(0))
+                end
+                if is_node(card.price) then role.set_label_color(card.price, colors.text_dark, to_fixed(0)) end
+                if is_node(card.level) then role.set_label_color(card.level, colors.text_blue, to_fixed(0)) end
             else
-                set_card_background_color(role, card, colors.card_locked)
-                role.set_ui_opacity(card.icon, to_fixed(opacity_configuration.locked_icon))
-                role.set_label_color(card.name, colors.text_dark, to_fixed(0))
-                role.set_label_color(card.description, colors.text_dark, to_fixed(0))
-                role.set_label_color(card.price, colors.text_grey, to_fixed(0))
-                role.set_label_color(card.level, colors.text_grey, to_fixed(0))
+                if is_node(card.background) then
+                    role.set_image_color(card.background, colors.card_locked, math.tofixed(0))
+                end
+                if is_node(card.icon) then role.set_ui_opacity(card.icon, to_fixed(opacity_configuration.locked_icon)) end
+                if is_node(card.name) then role.set_label_color(card.name, colors.text_dark, to_fixed(0)) end
+                if is_node(card.description) then
+                    role.set_label_color(card.description, colors.text_dark, to_fixed(0))
+                end
+                if is_node(card.price) then role.set_label_color(card.price, colors.text_grey, to_fixed(0)) end
+                if is_node(card.level) then role.set_label_color(card.level, colors.text_grey, to_fixed(0)) end
             end
         end
     end

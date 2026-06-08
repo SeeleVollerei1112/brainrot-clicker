@@ -82,10 +82,10 @@ local BoothConfig = {
     --   background_nodes -> 需要透明化的背景图片节点键（按需在编辑器导出后填入）
     -- 预设未导出时，运行时会安全跳过头顶文字并打日志（其余展台逻辑不受影响）。
     HEAD_UI = {
-        layer_name = "展台头顶界面",
-        level_node = "展台头顶等级",
-        income_node = "展台头顶收益",
-        total_node = "展台头顶总收益",
+        layer_name = "物品详细",
+        level_node = "物品等级",
+        income_node = "物品每秒收益",
+        total_node = "物品收益",
         background_nodes = {},
         -- 绑定到展示台「底面中心点」，再沿 Y 轴上移到模型头顶（按模型高度微调）。
         socket = "socket_origin",
@@ -93,19 +93,19 @@ local BoothConfig = {
         style = {
             level_color = 0xFFD14D2B,
             income_color = 0xFF2BAFD1,
-            total_color = 0xFFFFFFFF,
+            total_color = 0xFF799e35,
             outline_color = 0xFF000000,
             outline_width = 2,
             level_font_size = 65,
             income_font_size = 50,
-            total_font_size = 44,
+            total_font_size = 50,
             label_background_opacity = 0.0,
             background_opacity = 0.0,
             background_visible = false,
             level_prefix = "Lv.",
             income_prefix = "+",
             income_suffix = "/s",
-            total_prefix = "累计 ",
+            total_prefix = "",
         },
     },
 
