@@ -138,7 +138,7 @@ local function pick_backpack_item(character)
         end
     end
 
-    local slot_types = { BACKPACK, EQUIPPED }
+    local slot_types = { EQUIPPED, BACKPACK }
     for _, slot_type in ipairs(slot_types) do
         local list = character.get_equipment_list_by_slot_type(slot_type)
         if type(list) == "table" then
@@ -215,11 +215,11 @@ function BoothPlacement.place(role, zone_id, booth_index)
 
     -- 2) 在展台位创建世界物品（不使用 drop）。
     local world = GameAPI.create_equipment(item.prefab_id, pos)
+    ItemSynthesisSystem.attach_attrs(world, item.id, attrs)
     set_world_equipment(role_id, zone_id, booth_index, world)
 
-    -- 3) 背包里那件物品移除（创建到场景 = 从背包取出）。
-    ItemSynthesisSystem.forget_equipment(equipment)
-    destroy_equipment(equipment)
+    -- 3) 从玩家持有物里消耗 1 个实例；堆叠数量大于 1 时只减一层。
+    ItemSynthesisSystem.consume_equipment(equipment, 1)
 
     LuaAPI.log("[BoothPlacement] 放置成功 z=" .. zone_id .. " b=" .. booth_index
         .. " item=" .. item.id, 0)
@@ -245,10 +245,10 @@ function BoothPlacement.recycle(role, zone_id, booth_index)
     local item = BoothConfig.find_item(placement.item_id)
     local prefab_id = item and item.prefab_id
 
-    -- 1) 回到装备栏（槽位名在 BoothConfig.RECYCLE 配置；失败时回退储物栏并打日志）。
+    -- 1) 回到玩家持有物；先合并同 item/等级/收益的堆叠，再按装备栏->储物栏顺序新建。
     if prefab_id then
-        local equipment = character.create_equipment_to_slot(prefab_id, get_recycle_slot_type())
-        ItemSynthesisSystem.attach_attrs(equipment, placement.item_id, placement.attrs)
+        ItemSynthesisSystem.give_item_preferred_slots(role, placement.item_id, placement.attrs, 1,
+            { "EQUIPPED", "BACKPACK" })
     else
         LuaAPI.log("[BoothPlacement] 回收物品缺少 prefab_id, 仅清状态 item="
             .. tostring(placement.item_id), 1)
@@ -286,6 +286,7 @@ function BoothPlacement.spawn_saved(role)
             local pos = prefab_id and resolve_booth_position(zone_id, booth_index)
             if prefab_id and pos then
                 local world = GameAPI.create_equipment(prefab_id, pos)
+                ItemSynthesisSystem.attach_attrs(world, placement.item_id, placement.attrs)
                 set_world_equipment(role_id, zone_id, booth_index, world)
             end
         end

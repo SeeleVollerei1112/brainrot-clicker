@@ -152,9 +152,7 @@ function GiveBoothSynthesisItem(role_id, item_id, level, count)
 	if output_count <= 0 then
 		output_count = 1
 	end
-	for _ = 1, output_count do
-		ItemSynthesisSystem.give_item(role, item_id, attrs, "BACKPACK")
-	end
+	ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, output_count, { "EQUIPPED", "BACKPACK" })
 	role.show_tips("已发放合成材料 item=" .. tostring(item_id)
 		.. " Lv." .. tostring(output_level)
 		.. " x" .. tostring(output_count))
@@ -206,8 +204,7 @@ function TestBoothItemSynthesis(role_id, item_id)
 	attrs.level = math.tointeger(attrs.level or 1) or 1
 	attrs.income_per_second = math.tointeger(attrs.income_per_second or 0) or 0
 
-	ItemSynthesisSystem.give_item(role, item_id, attrs, "BACKPACK")
-	ItemSynthesisSystem.give_item(role, item_id, attrs, "BACKPACK")
+	ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, 2, { "EQUIPPED", "BACKPACK" })
 
 	local result = ItemSynthesisSystem.synthesize(role, item_id, attrs.level)
 	local expected_level = attrs.level + 1
@@ -263,8 +260,7 @@ function TestBoothSynthesisBoardSync(role_id, zone_id, booth_index, item_id)
 	local attrs = debug_copy_attrs(item.base_attrs)
 	attrs.level = math.tointeger(attrs.level or 1) or 1
 	attrs.income_per_second = math.tointeger(attrs.income_per_second or 0) or 0
-	ItemSynthesisSystem.give_item(role, item_id, attrs, "BACKPACK")
-	ItemSynthesisSystem.give_item(role, item_id, attrs, "BACKPACK")
+	ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, 2, { "EQUIPPED", "BACKPACK" })
 
 	local result = ItemSynthesisSystem.synthesize(role, item_id, attrs.level)
 	if not result.success then
