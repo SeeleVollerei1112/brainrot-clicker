@@ -26,46 +26,46 @@
 
 **每文件一 commit**,清理范围 = 该文件的 `is_node` 去除 + 薄包装内联 + 冗余字段判空裁剪(保证存在的节点就地写、删判空;可选节点保留)。改完跑测对应功能。
 
-## 模块 B1：Clicker/ClickerView 清理
+## 模块 B1：Clicker/ClickerView 清理 ✅
 **风险**:低
-- [ ] 删 `is_node` 定义,调用降级为 `if x then`
-- [ ] 裁剪保证存在节点的冗余判空
-- [ ] commit：`refactor(B1): ClickerView 去 is_node/冗余判空`
+- [x] 删 `is_node` 定义,调用降级为 `if x then`
+- [x] 裁剪保证存在节点的冗余判空
+- [x] commit：`refactor(B1): ClickerView 去 is_node/冗余判空`（558b2b2）
 **验收**:WHEN 点击角色,THEN 飘字 / HUD / 连击条 / 皮肤切换正常。
 
-## 模块 B2：Clicker/UpgradeShop/UpgradeShopView 清理
+## 模块 B2：Clicker/UpgradeShop/UpgradeShopView 清理 ✅
 **风险**:低(本文件 is_node 调用最密集,~45 处)
-- [ ] 删 `is_node` 定义,调用降级
-- [ ] 裁剪冗余字段判空(逐处判断卡片字段是否保证存在)
-- [ ] commit：`refactor(B2): UpgradeShopView 去 is_node/冗余判空`
+- [x] 删 `is_node` 定义,调用降级
+- [x] 卡片字段判空属场景导出缺失的合法边界守卫,保留(仅去 is_node)
+- [x] commit：`refactor(B2): UpgradeShopView 去 is_node`（2645963）
 **验收**:WHEN 打开商店、购买升级,THEN 卡片渲染、扣费、刷新、锁定态显示正常。
 
-## 模块 B3：Mall/MallView 清理（含薄包装内联）
+## 模块 B3：Mall/MallView 清理（含薄包装内联）✅
 **风险**:低
-- [ ] 删 `is_node` 定义,调用降级
-- [ ] 内联薄包装 `child(parent, name)` 与 `MallView.get_canvas()`
-- [ ] 裁剪冗余字段判空
-- [ ] commit：`refactor(B3): MallView 去 is_node、内联薄包装`
+- [x] 删 `is_node` 定义,调用降级
+- [x] `child` 用 ~10 处且带 nil-parent 守卫,去 is_node 后收敛为一行(不内联)
+- [x] `MallView.get_canvas()` 无调用方,删除(死代码)
+- [x] commit：`refactor(B3): MallView 去 is_node、简化 child、删死代码 get_canvas`（f815abc）
 **验收**:WHEN 开关商城、切标签、点购买,THEN 渲染与交互正常。
 
-## 模块 B4：Inventory/InventoryView 清理
+## 模块 B4：Inventory/InventoryView 清理 ✅
 **风险**:低
-- [ ] 删 `is_node` 定义,调用降级
-- [ ] 裁剪冗余字段判空
-- [ ] commit：`refactor(B4): InventoryView 去 is_node/冗余判空`
+- [x] 删 `is_node` 定义,调用降级
+- [x] commit：`refactor(B4): InventoryView 去 is_node/冗余判空`（3bfb054）
 **验收**:WHEN 切换 装备栏/储物栏 标签,THEN 选中态、文字变色正常。
 
-## 模块 B5：Booth/BoothInteraction 清理
+## 模块 B5：Booth/BoothInteraction 清理 ✅
 **风险**:低
-- [ ] 删 `is_node` 定义,调用降级(place/recycle/synthesis 三按钮)
-- [ ] commit：`refactor(B5): BoothInteraction 去 is_node/冗余判空`
+- [x] 删 `is_node` 定义,调用降级(place/recycle/synthesis 三按钮)
+- [x] commit：`refactor(B5): BoothInteraction 去 is_node`（63fafac）
 **验收**:WHEN 站上展台位,THEN 放置/回收/合成按钮显隐与点击正常。
 
-## 模块 B6：Booth/BoothZoneView 清理（含薄包装内联）
+## 模块 B6：Booth/BoothZoneView 清理（含薄包装内联）✅
 **风险**:低
-- [ ] 删 `is_node` 定义,调用降级
-- [ ] 内联薄包装 `get_scene_ui_node(layer, node_name)` 与 `head_layer_key()`
-- [ ] commit：`refactor(B6): BoothZoneView 去 is_node、内联薄包装`
+- [x] 删 `is_node` 定义,调用降级
+- [x] `head_layer_key()` 仅一处调用,内联
+- [x] `get_scene_ui_node` 用 4 处且带 UINodes 查找逻辑,保留并简化(不内联)
+- [x] commit：`refactor(B6): BoothZoneView 去 is_node、内联 head_layer_key`（5258748）
 **验收**:WHEN 解锁展区、有放置物挂机,THEN 头顶 3D 文字(等级/收益/累计)与公告板刷新正常。
 
 ---
@@ -145,12 +145,12 @@ SessionStateRegistry.declare("inventory", {            -- 无 create
 
 | 模块 | 名称 | 状态 | 依赖 |
 |------|------|------|------|
-| B1 | ClickerView 清理 | ⬜ 未开始 | 无 |
-| B2 | UpgradeShopView 清理 | ⬜ 未开始 | 无 |
-| B3 | MallView 清理 + 内联 | ⬜ 未开始 | 无 |
-| B4 | InventoryView 清理 | ⬜ 未开始 | 无 |
-| B5 | BoothInteraction 清理 | ⬜ 未开始 | 无 |
-| B6 | BoothZoneView 清理 + 内联 | ⬜ 未开始 | 无 |
+| B1 | ClickerView 清理 | ✅ 已完成 (558b2b2) | 无 |
+| B2 | UpgradeShopView 清理 | ✅ 已完成 (2645963) | 无 |
+| B3 | MallView 清理 + 内联 | ✅ 已完成 (f815abc) | 无 |
+| B4 | InventoryView 清理 | ✅ 已完成 (3bfb054) | 无 |
+| B5 | BoothInteraction 清理 | ✅ 已完成 (63fafac) | 无 |
+| B6 | BoothZoneView 清理 + 内联 | ✅ 已完成 (5258748) | 无 |
 | A1 | SessionStateRegistry + 对象化 | ⬜ 未开始 | B |
 | A2 | 三家状态迁移 | ⬜ 未开始 | A1 |
 | A3 | 删死包装/判空 | ⬜ 未开始 | A2 |
