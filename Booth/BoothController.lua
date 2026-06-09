@@ -20,18 +20,13 @@ local BoothController = {}
 BoothController.INCOME_TICK_INTERVAL = BoothConfig.INCOME_TICK_INTERVAL
 BoothController.AUTOSAVE_INTERVAL = BoothConfig.AUTOSAVE_INTERVAL
 
--- 编排的子模块（场景表现层 / 交互层 / 放置层）。子模块不反向 require 本控制器，
--- 而是在 initialize 时由本控制器把自身（状态读写门面）注入（见各子模块 .bind）。
--- 因此这里可直接顶层 require，不存在加载期循环依赖。
-local BoothZoneView = require("Booth.BoothZoneView")
-local BoothInteraction = require("Booth.BoothInteraction")
-local BoothPlacement = require("Booth.BoothPlacement")
-
--- 把本控制器（状态读写门面）注入需要它的子模块，替代它们反向 require。
--- 加载期即注入：BoothController 表已创建，子模块按 controller.xxx 在调用时解析，
--- 此时方法均已挂载；这样即便 initialize 之前被调用（如 DebugTools）也安全。
-BoothZoneView.bind(BoothController)
-BoothPlacement.bind(BoothController)
+-- 子模块延迟加载。编辑器会把顶层 require 链算进 BoothController 编译成本；
+-- BoothPlacement 会继续加载合成系统，放在真正初始化/调用时再加载，避免启动编译超时。
+local BoothZoneView = nil
+local BoothInteraction = nil
+local BoothPlacement = nil
+local zone_view_bound = false
+local placement_bound = false
 
 ---@type table<RoleID, BoothState>
 local state_by_role_id = {}
@@ -43,14 +38,52 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
+local function get_zone_view()
+    if not BoothZoneView then
+        BoothZoneView = require("Booth.BoothZoneView")
+    end
+    return BoothZoneView
+end
+
+local function get_interaction()
+    if not BoothInteraction then
+        BoothInteraction = require("Booth.BoothInteraction")
+    end
+    return BoothInteraction
+end
+
+local function get_placement()
+    if not BoothPlacement then
+        BoothPlacement = require("Booth.BoothPlacement")
+    end
+    return BoothPlacement
+end
+
+local function ensure_zone_view_bound()
+    if zone_view_bound then
+        return
+    end
+    get_zone_view().bind(BoothController)
+    zone_view_bound = true
+end
+
+local function ensure_placement_bound()
+    if placement_bound then
+        return
+    end
+    get_placement().bind(BoothController)
+    placement_bound = true
+end
+
 ---初始化入口；作为展台系统的统一门面，在此编排子模块的全局初始化
 ---（场景表现层 + 交互层），并自注册收益结算 / 自动存档定时器。
 ---@param application Application
 function BoothController.initialize(application)
     local register_trigger = application.register_trigger
 
-    BoothZoneView.initialize()
-    BoothInteraction.initialize(register_trigger)
+    ensure_zone_view_bound()
+    get_zone_view().initialize()
+    get_interaction().initialize(register_trigger)
 
     -- 收益结算定时器：仅内存累加 + 刷新公告板
     register_trigger(
@@ -88,9 +121,11 @@ function BoothController.setup_session(session)
     -- 离线收益结算放在刷新展现之前，让公告板直接显示结算后的总收益。
     local offline_gain, offline_sec = BoothController.settle_offline(role, state)
 
-    BoothInteraction.initialize_role(role)
-    BoothPlacement.spawn_saved(role)
-    BoothZoneView.refresh_all(role)
+    ensure_zone_view_bound()
+    ensure_placement_bound()
+    get_interaction().initialize_role(role)
+    get_placement().spawn_saved(role)
+    get_zone_view().refresh_all(role)
 
     if offline_gain > 0 and offline_sec >= (BoothConfig.OFFLINE.min_notify_seconds or 0) then
         role.show_tips("欢迎回来，离线收益 +" .. tostring(offline_gain))
@@ -111,9 +146,11 @@ function BoothController.cleanup_session(session)
         return
     end
 
-    BoothPlacement.clear_role(role)
-    BoothInteraction.cleanup_role(role)
-    BoothZoneView.clear_labels(role)
+    ensure_zone_view_bound()
+    ensure_placement_bound()
+    get_placement().clear_role(role)
+    get_interaction().cleanup_role(role)
+    get_zone_view().clear_labels(role)
 
     local state = state_by_role_id[role_id]
     if state then
@@ -205,9 +242,9 @@ function BoothController.tick_income(role)
 
     for _, zone in ipairs(BoothConfig.ZONES) do
         if BoothState.is_zone_unlocked(state, zone.id) then
-            BoothZoneView.refresh_board(role, zone.id)
+            get_zone_view().refresh_board(role, zone.id)
             for booth_index = 0, zone.booth_count - 1 do
-                BoothZoneView.refresh_booth_label(role, zone.id, booth_index)
+                get_zone_view().refresh_booth_label(role, zone.id, booth_index)
             end
         end
     end
@@ -236,7 +273,8 @@ function BoothController.unlock_zone(role, zone_id)
         return false
     end
     BoothPersistence.save(role, state)
-    BoothZoneView.refresh_zone(role, zone_id)
+    ensure_zone_view_bound()
+    get_zone_view().refresh_zone(role, zone_id)
     return true
 end
 
@@ -250,7 +288,8 @@ function BoothController.lock_zone(role, zone_id)
         return false
     end
     BoothPersistence.save(role, state)
-    BoothZoneView.refresh_zone(role, zone_id)
+    ensure_zone_view_bound()
+    get_zone_view().refresh_zone(role, zone_id)
     return true
 end
 
@@ -283,7 +322,8 @@ function BoothController.try_unlock_zone(role, zone_id, spend_fn)
 
     BoothState.unlock_zone(state, zone_id)
     BoothPersistence.save(role, state)
-    BoothZoneView.refresh_zone(role, zone_id)
+    ensure_zone_view_bound()
+    get_zone_view().refresh_zone(role, zone_id)
     return true, "ok"
 end
 
@@ -292,10 +332,11 @@ end
 ---@param booth_index integer
 ---@param item_id integer
 ---@param attrs table<string, integer|string>|nil
+---@param preserve_booth_income boolean|nil
 ---@return boolean success
-function BoothController.place_item(role, zone_id, booth_index, item_id, attrs)
+function BoothController.place_item(role, zone_id, booth_index, item_id, attrs, preserve_booth_income)
     local state = BoothController.get_state(role)
-    if not state or not BoothState.place_item(state, zone_id, booth_index, item_id, attrs) then
+    if not state or not BoothState.place_item(state, zone_id, booth_index, item_id, attrs, preserve_booth_income) then
         return false
     end
     BoothPersistence.save(role, state)

@@ -73,6 +73,7 @@ local BoothConfig = {
     UI = {
         place_button = "展台放置按钮",
         recycle_button = "展台回收按钮",
+        synthesis_button = "展台合成按钮",
     },
 
     -- 展台「头顶」3D 文字界面：放置物品后在展示台上方绑定一个场景界面(E3DLayer)，
@@ -93,7 +94,7 @@ local BoothConfig = {
         style = {
             level_color = 0xFFD14D2B,
             income_color = 0xFF2BAFD1,
-            total_color = 0xFF799e35,
+            total_color = 0xFFE3BA09,
             outline_color = 0xFF000000,
             outline_width = 2,
             level_font_size = 65,

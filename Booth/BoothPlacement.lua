@@ -153,6 +153,21 @@ local function pick_backpack_item(character)
     return nil, nil
 end
 
+---读取玩家当前手持/选中的展台物品；合成只认这件，不从背包兜底搜索。
+---@param character Character
+---@return Equipment|nil equipment, integer|nil item_id, table<string, integer|string>|nil attrs
+local function get_selected_booth_item(character)
+    local selected = character and character.get_selected_equipment()
+    if not selected then
+        return nil, nil, nil
+    end
+    local item_id, attrs = ItemSynthesisSystem.get_equipment_item(selected)
+    if item_id and attrs then
+        return selected, item_id, attrs
+    end
+    return nil, nil, nil
+end
+
 -- ---------- 查询 ----------
 
 ---该展台位是否已放置物品（依据存档状态）。
@@ -174,6 +189,31 @@ function BoothPlacement.has_placeable_item(role)
     end
     local equipment = select(1, pick_backpack_item(character))
     return equipment ~= nil
+end
+
+---当前展台物品是否能与玩家手持物合成。
+---@param role Role
+---@param zone_id integer
+---@param booth_index integer
+---@return boolean can
+---@return string reason
+function BoothPlacement.can_synthesize_with_selected(role, zone_id, booth_index)
+    local character = role and role.get_ctrl_unit()
+    if not character then
+        return false, "no_role"
+    end
+
+    local placement = controller.get_placement(role, zone_id, booth_index)
+    if not placement then
+        return false, "empty"
+    end
+
+    local selected = select(1, get_selected_booth_item(character))
+    if not selected then
+        return false, "no_held_item"
+    end
+
+    return ItemSynthesisSystem.can_synthesize_pair(placement.item_id, placement.attrs, selected)
 end
 
 -- ---------- 放置 / 回收 ----------
@@ -262,6 +302,62 @@ function BoothPlacement.recycle(role, zone_id, booth_index)
     controller.remove_item(role, zone_id, booth_index)
 
     LuaAPI.log("[BoothPlacement] 回收成功 z=" .. zone_id .. " b=" .. booth_index, 0)
+    return true, "ok"
+end
+
+---用展台位上的物品 + 玩家当前手持物合成，结果直接替换生成到该展台位。
+---@param role Role
+---@param zone_id integer
+---@param booth_index integer
+---@return boolean success, string reason
+function BoothPlacement.synthesize_with_selected(role, zone_id, booth_index)
+    local role_id = get_role_id(role)
+    local character = role and role.get_ctrl_unit()
+    if not role_id or not character then
+        return false, "no_role"
+    end
+
+    local placement = controller.get_placement(role, zone_id, booth_index)
+    if not placement then
+        return false, "empty"
+    end
+
+    local selected = select(1, get_selected_booth_item(character))
+    if not selected then
+        return false, "no_held_item"
+    end
+
+    local result = ItemSynthesisSystem.preview_pair(placement.item_id, placement.attrs, selected)
+    if not result.success then
+        return false, result.reason
+    end
+
+    local result_item = BoothConfig.find_item(result.item_id)
+    if not result_item or not result_item.prefab_id then
+        return false, "result_missing"
+    end
+
+    local pos = resolve_booth_position(zone_id, booth_index)
+    if not pos then
+        return false, "no_position"
+    end
+
+    -- 合成不等于取下收取：只替换展台物，保留该展台位已经累计的收益计数。
+    if not controller.place_item(role, zone_id, booth_index, result.item_id, result.attrs, true) then
+        return false, "state_rejected"
+    end
+
+    ItemSynthesisSystem.consume_equipment(selected, 1)
+    destroy_equipment(get_world_equipment(role_id, zone_id, booth_index))
+
+    local world = GameAPI.create_equipment(result_item.prefab_id, pos)
+    ItemSynthesisSystem.attach_attrs(world, result.item_id, result.attrs)
+    set_world_equipment(role_id, zone_id, booth_index, world)
+
+    LuaAPI.log("[BoothPlacement] 合成成功 z=" .. tostring(zone_id)
+        .. " b=" .. tostring(booth_index)
+        .. " item=" .. tostring(result.item_id)
+        .. " level=" .. tostring(result.level), 0)
     return true, "ok"
 end
 

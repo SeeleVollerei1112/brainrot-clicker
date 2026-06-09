@@ -322,10 +322,17 @@ function BoothZoneView.refresh_board(role, zone_id)
 
     local state = controller.get_state(role)
     local unlocked = state and BoothState.is_zone_unlocked(state, zone_id)
+    ---@cast board Obstacle
     if unlocked then
         local per_second, total = BoothZoneView.compute_zone_income(role, zone_id)
         board.set_billboard_text("每秒总收益: " .. tostring(per_second) .. "\n总收益: " .. tostring(total))
-        board.set_billboard_text_color(COLOR_UNLOCKED)
+        board.set_billboard_text_color(
+            0xFF8A5A12,
+            0xFF5C3500,
+            0xFFD39A22,
+            0xFFFFF1A8,
+            0xFFB67812
+        )
     else
         board.set_billboard_text("未解锁")
         board.set_billboard_text_color(COLOR_LOCKED)

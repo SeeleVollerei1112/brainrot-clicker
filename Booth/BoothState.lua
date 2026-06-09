@@ -150,8 +150,9 @@ end
 ---@param booth_index integer
 ---@param item_id integer
 ---@param attrs table<string, BoothAttrValue>|nil
+---@param preserve_booth_income boolean|nil
 ---@return boolean success
-function BoothState.place_item(state, zone_id, booth_index, item_id, attrs)
+function BoothState.place_item(state, zone_id, booth_index, item_id, attrs, preserve_booth_income)
     state.booth_income = state.booth_income or {}
 
     if not BoothState.is_zone_unlocked(state, zone_id) then
@@ -188,7 +189,11 @@ function BoothState.place_item(state, zone_id, booth_index, item_id, attrs)
         zone_booth_income = {}
         state.booth_income[zone_id] = zone_booth_income
     end
-    zone_booth_income[booth_index] = 0
+    if not preserve_booth_income then
+        zone_booth_income[booth_index] = 0
+    else
+        zone_booth_income[booth_index] = zone_booth_income[booth_index] or 0
+    end
     return true
 end
 
