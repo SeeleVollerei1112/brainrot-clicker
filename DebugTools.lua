@@ -223,6 +223,67 @@ end
 
 ---@export_plugin
 ---@style button
+---@desc 检测脑红实例KV读写
+---@param role_id RoleID 玩家ID
+---@param item_id integer 物品ID
+---@param level integer 等级(<=0默认3)
+function TestBoothItemInstanceKV(role_id, item_id, level)
+	local role = debug_get_role(role_id)
+	if not role then
+		return
+	end
+
+	local BoothConfig = require("Booth.BoothConfig")
+	local ItemSynthesisSystem = require("Inventory.ItemSynthesisSystem")
+	local item = BoothConfig.find_item(item_id)
+	if not item then
+		role.show_tips("实例KV检测失败: 未配置物品 " .. tostring(item_id))
+		return
+	end
+
+	local attrs = debug_copy_attrs(item.base_attrs)
+	local target_level = math.tointeger(level) or 3
+	if target_level <= 0 then
+		target_level = 3
+	end
+	attrs.level = target_level
+	attrs.income_per_second = debug_level_income(attrs.income_per_second or 0, target_level)
+
+	local equipment = ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, 1, { "EQUIPPED", "BACKPACK" })
+	if not equipment then
+		role.show_tips("实例KV检测失败: 发放物品失败")
+		return
+	end
+
+	local kv_item_id = math.tointeger(equipment.get_kv_by_type(Enums.ValueType.Int, "booth_item_id")) or 0
+	local kv_level = math.tointeger(equipment.get_kv_by_type(Enums.ValueType.Int, "booth_level")) or 0
+	local kv_income = math.tointeger(equipment.get_kv_by_type(Enums.ValueType.Int, "booth_income_per_second")) or 0
+	local read_item_id, read_attrs = ItemSynthesisSystem.get_equipment_item(equipment)
+	local read_level = read_attrs and math.tointeger(read_attrs.level or 0) or 0
+	local read_income = read_attrs and math.tointeger(read_attrs.income_per_second or 0) or 0
+
+	if kv_item_id == item_id
+		and kv_level == target_level
+		and kv_income == attrs.income_per_second
+		and read_item_id == item_id
+		and read_level == target_level
+		and read_income == attrs.income_per_second then
+		role.show_tips("实例KV检测通过: item=" .. tostring(item_id)
+			.. " Lv." .. tostring(target_level)
+			.. " 收益=" .. tostring(kv_income) .. "/s")
+	else
+		role.show_tips("实例KV检测失败: kv="
+			.. tostring(kv_item_id) .. "/"
+			.. tostring(kv_level) .. "/"
+			.. tostring(kv_income)
+			.. " read=" .. tostring(read_item_id) .. "/"
+			.. tostring(read_level) .. "/"
+			.. tostring(read_income))
+	end
+end
+
+---@export_plugin
+---@style button
 ---@desc 检测合成后展台收益同步
 ---@param role_id RoleID 玩家ID
 ---@param zone_id integer 展区ID

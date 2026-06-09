@@ -142,6 +142,33 @@ function BoothPersistence.to_json(state)
     })
 end
 
+---@param role Role
+---@param booth_blob string
+---@return string blob
+local function preserve_inventory_blob(role, booth_blob)
+    if not role or not role.has_saved_archive() then
+        return booth_blob
+    end
+
+    local current_blob = role.get_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id)
+    if type(current_blob) ~= "string" or current_blob == "" then
+        return booth_blob
+    end
+
+    local current_data = Json.decode(current_blob)
+    if type(current_data) ~= "table" or current_data.inventory == nil then
+        return booth_blob
+    end
+
+    local booth_data = Json.decode(booth_blob)
+    if type(booth_data) ~= "table" then
+        return booth_blob
+    end
+
+    booth_data.inventory = current_data.inventory
+    return Json.encode(booth_data)
+end
+
 -- ---------- 反序列化 ----------
 
 ---从 JSON 字符串重建运行时状态，并按当前配置校验。
@@ -245,7 +272,7 @@ function BoothPersistence.save(role, state)
     if not role or not archives_ready() then
         return
     end
-    local blob = BoothPersistence.to_json(state)
+    local blob = preserve_inventory_blob(role, BoothPersistence.to_json(state))
     role.set_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id, blob)
     LuaAPI.log("[BoothPersistence] 已保存展台存档: " .. blob, 0)
 end

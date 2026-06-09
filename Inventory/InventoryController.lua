@@ -23,7 +23,16 @@ function InventoryController.setup_session(session)
     if not role then
         return
     end
+    ItemSynthesisSystem.restore_role_inventory(role)
     InventoryView.initialize_role(role)
+end
+
+---@param session PlayerSession
+function InventoryController.cleanup_session(session)
+    local role = session and session.role
+    if role then
+        ItemSynthesisSystem.save_role_inventory(role)
+    end
 end
 
 ---@param role Role
