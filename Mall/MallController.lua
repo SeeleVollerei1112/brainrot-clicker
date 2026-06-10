@@ -64,17 +64,9 @@ end
 ---（编辑器 visible=false 仅在保存后生效，故用代码兜底）。
 ---@param session PlayerSession
 function MallController.setup_session(session)
-    local role = session and session.role
-    if not role then
-        return
-    end
+    local role = session.role
     role.send_ui_custom_event(MallConfig.EVENTS.close, {})
     MallView.initialize_role(role)
-end
-
----@param role Role
-function MallController.initialize_role(role)
-    MallController.setup_session({ role = role })
 end
 
 ---绑定商城所有交互。GAME_INIT 时由 GameApp 调用。

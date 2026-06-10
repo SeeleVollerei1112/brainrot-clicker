@@ -133,11 +133,6 @@ function BoothController.setup_session(session)
     end
 end
 
----@param role Role
-function BoothController.initialize_role(role)
-    BoothController.setup_session({ role = role })
-end
-
 ---玩家离开时编排子模块清理（销毁世界放置物、清交互记录）。
 ---状态保存由 SessionStateRegistry 的 save 钩子在清理后统一执行。
 ---@param session PlayerSession
@@ -148,11 +143,6 @@ function BoothController.cleanup_session(session)
     get_placement().clear_role(role)
     get_interaction().cleanup_role(role)
     get_zone_view().clear_labels(role)
-end
-
----@param role Role
-function BoothController.cleanup_role(role)
-    BoothController.cleanup_session({ role = role })
 end
 
 ---获取玩家当前展台状态（经 session 状态片，未创建时由工厂读档创建）。

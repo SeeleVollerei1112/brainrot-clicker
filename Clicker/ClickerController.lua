@@ -67,10 +67,6 @@ end
 
 ---@param session PlayerSession
 function ClickerController.handle_character_click(session)
-    if not session then
-        return
-    end
-
     local role = session.role
     local state = session:get_or_create_state("clicker")
     local income = ClickerState.add_click_income(state)
@@ -88,10 +84,6 @@ end
 ---@param session PlayerSession
 ---@param item_id integer
 function ClickerController.handle_shop_purchase(session, item_id)
-    if not session then
-        return
-    end
-
     local state = session:get_or_create_state("clicker")
     local result = UpgradeShopSystem.purchase(state, item_id)
     if not result.success then
@@ -107,10 +99,6 @@ end
 
 ---@param session PlayerSession
 function ClickerController.handle_open_click_canvas(session)
-    if not session then
-        return
-    end
-
     local role = session.role
     session.click_canvas_open = true
     role.send_ui_custom_event(ClickerConfig.EVENTS.open_click_canvas, {})
@@ -120,10 +108,6 @@ end
 
 ---@param session PlayerSession
 function ClickerController.handle_close_click_canvas(session)
-    if not session then
-        return
-    end
-
     session.click_canvas_open = false
     session.role.send_ui_custom_event(ClickerConfig.EVENTS.close_click_canvas, {})
 end
@@ -240,22 +224,8 @@ function ClickerController.setup_session(session)
 end
 
 ---@param session PlayerSession
-function ClickerController.initialize_role(session)
-    ClickerController.setup_session(session)
-end
-
----@param session PlayerSession
 function ClickerController.cleanup_session(session)
-    local role = session and session.role
-    if not role then
-        return
-    end
-    ClickerView.cleanup_role(role)
-end
-
----@param role Role
-function ClickerController.cleanup_role(role)
-    ClickerController.cleanup_session({ role = role })
+    ClickerView.cleanup_role(session.role)
 end
 
 function ClickerController.shutdown()
