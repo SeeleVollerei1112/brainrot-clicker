@@ -97,38 +97,41 @@ SessionStateRegistry.declare("inventory", {            -- 无 create
 
 > ⚠️ 隐藏耦合:Booth 与 Inventory **共用存档槽位 1001**,各自 read-merge-write 保留对方字段(`preserve_inventory_blob` / `load_archive_root`)。`save_all` 串行调两家不破坏合并语义,但实现时须确认。
 
-## 模块 A1：SessionStateRegistry + session 对象化
+## 模块 A1：SessionStateRegistry + session 对象化 ✅
 **依赖**:无(B 完成后) **风险**:中(动装配核心)
-- [ ] 新建 `App/SessionStateRegistry.lua`:`declare(key, spec)` / `create(key, sess)` / `restore_all(sess)` / `save_all(sess)`
-- [ ] `GameApp` 的 session 改为带 `states = {}` 的对象 + 方法 `get_or_create_state(key)`
-- [ ] `ControllerRegistry.create_player_state` 的 Clicker 特判改为走注册表声明(或移除,改由惰性 create)
-- [ ] commit：`refactor(A1): 引入 SessionStateRegistry，session 对象化`
+- [x] 新建 `App/SessionStateRegistry.lua`:`declare(key, spec)` / `create(key, sess)` / `restore_all(sess)` / `save_all(sess)`(按声明顺序串行遍历,保证帧同步确定性)
+- [x] `GameApp` 的 session 改为带 `states = {}` 的对象 + 方法 `get_or_create_state(key)`
+- [x] `ControllerRegistry.create_player_state` 的 Clicker 特判移除,clicker 状态片惰性 create
+- [x] commit：`refactor(A1): 引入 SessionStateRegistry，session 对象化`（a9a85d2）
 **验收**:WHEN 玩家进场,THEN 各功能状态按需创建,玩法与重构前一致。
 
-## 模块 A2：三家状态迁移到 session
+## 模块 A2：三家状态迁移到 session ✅
 **依赖**:A1 **风险**:中
-- [ ] `SessionStateRegistry.declare` 三家(clicker / booth / inventory)
-- [ ] 各 `Controller.setup_session/cleanup_session` 改用 `session:get_or_create_state(...)` 与 `SessionStateRegistry.save_all/restore_all`
-- [ ] 删 `BoothController.state_by_role_id` + 本文件内重复的 `get_role_id`;Booth 收益/自动存档定时器与 DebugTools 入口改走 session(给 Booth 注入 `find_session`,公共方法签名不变)
-- [ ] 确认 Booth/Inventory 共用槽位的 read-merge-write 在新 save 路径下不破
-- [ ] commit：`refactor(A2): Clicker/Booth/Inventory 状态收归 session`
+- [x] `SessionStateRegistry.declare` 三家(clicker / booth / inventory)
+- [x] 各 `Controller.setup_session/cleanup_session` 改用 `session:get_or_create_state(...)`;恢复/保存走 `restore_all/save_all`
+- [x] 删 `BoothController.state_by_role_id` + 本文件内重复的 `get_role_id`;注入 `find_session`,DebugTools 用的公共方法签名不变
+- [x] 确认共用槽位 read-merge-write 串行 save 不破合并语义;确认 Booth 清理路径(clear_role/clear_labels/cleanup_role)不回查 get_state,session 先移除不影响清理
+- [x] commit：`refactor(A2): Clicker/Booth/Inventory 状态收归 session`（9177d44）
 **验收**:WHEN 进出场、放置/回收/解锁、离线收益、背包存取,THEN 全部与重构前一致。
 
-## 模块 A3：删死包装 + 架构性判空
-**依赖**:A2(状态非空由架构保证后才能删守卫) **风险**:低
-- [ ] 删 8 个无调用点的 `*Controller.initialize_role` / `cleanup_role`(Clicker/Lottery/Mall/Inventory/Booth)
-- [ ] 删各 `setup/cleanup_session` 里 `local role = session and session.role` / `if not role then return` 这类架构已保证的判空
-- [ ] 删 `ClickerController.handle_*` 内层 `if not session then return`(调用处已 `if session then`,双重判空)
-- [ ] commit：`refactor(A3): 删除死包装与内部不变量判空`
+## 模块 A3：删死包装 + 架构性判空 ✅
+**依赖**:A2 **风险**:低
+- [x] 删 8 个无调用点的 `*Controller.initialize_role` / `cleanup_role`(Clicker/Lottery/Mall/Inventory/Booth)
+- [x] 删各 `setup/cleanup_session` 里架构已保证的 session/role 判空
+- [x] 删 `ClickerController.handle_*` 内层 `if not session then return`(双重判空)
+- [x] commit：`refactor(A3): 删除死包装与内部不变量判空`（37cac58）
 **验收**:WHEN 完整玩法跑测一轮,THEN 零报错、行为不变。
 
-## 模块 A4：删 ArchiveKeys，槽位源自 ArchivesData
-**依赖**:无(可与 A 其余并行) **风险**:低
-- [ ] 删 `Data/ArchiveKeys.lua`
-- [ ] `BoothPersistence` / `ItemSynthesisSystem` 顶部改 `local BOOTH = require("Data.ArchivesData")["展台状态"]`,引用 `BOOTH.id` / `BOOTH.vType`
-- [ ] 更新"不动清单":`ArchivesData` 成为存档槽位唯一真相
-- [ ] commit：`refactor(A4): 删 ArchiveKeys，存档槽位源自自动导出的 ArchivesData`
+## 模块 A4：删 ArchiveKeys，槽位源自 ArchivesData ✅
+**依赖**:无 **风险**:低
+- [x] 删 `Data/ArchiveKeys.lua`
+- [x] `BoothPersistence` / `ItemSynthesisSystem` 顶部改 `local BOOTH_ARCHIVE = require("Data.ArchivesData")["展台状态"]`,引用 `.id` / `.vType`
+- [x] `ArchivesData` 成为存档槽位唯一真相
+- [x] commit：`refactor(A4): 删 ArchiveKeys，存档槽位源自自动导出的 ArchivesData`（4878150）
 **验收**:WHEN 存/读档(展台 + 背包),THEN 数据正确、无槽位报错。
+
+> 附加 commit（2bc30b3）：采纳用户工作区的 to_int 内联，按"防御只留信任边界"原则在引擎返回值/存档反序列化 6 处补 `or 0`，并修掉意外重复的 get_slot_type。
+> ⚠️ 跑测验证待编辑器启动后执行（A1-A4 完成时编辑器未运行）。
 
 ---
 
@@ -151,10 +154,10 @@ SessionStateRegistry.declare("inventory", {            -- 无 create
 | B4 | InventoryView 清理 | ✅ 已完成 (3bfb054) | 无 |
 | B5 | BoothInteraction 清理 | ✅ 已完成 (63fafac) | 无 |
 | B6 | BoothZoneView 清理 + 内联 | ✅ 已完成 (5258748) | 无 |
-| A1 | SessionStateRegistry + 对象化 | ⬜ 未开始 | B |
-| A2 | 三家状态迁移 | ⬜ 未开始 | A1 |
-| A3 | 删死包装/判空 | ⬜ 未开始 | A2 |
-| A4 | 删 ArchiveKeys | ⬜ 未开始 | 无(可并行) |
+| A1 | SessionStateRegistry + 对象化 | ✅ 已完成 (a9a85d2) | B |
+| A2 | 三家状态迁移 | ✅ 已完成 (9177d44) | A1 |
+| A3 | 删死包装/判空 | ✅ 已完成 (37cac58) | A2 |
+| A4 | 删 ArchiveKeys | ✅ 已完成 (4878150) | 无 |
 
 ---
 
