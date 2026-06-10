@@ -31,6 +31,8 @@ end
 ---玩家会话创建时调用：关闭标签文字触摸并应用默认选中。
 ---@param session PlayerSession
 function InventoryController.setup_session(session)
+    -- 系统背包面板位于引擎 UI 顶层，会覆盖自定义画布；这里改用自定义背包侧边栏。
+    session.role.show_bag_panel(false)
     InventoryView.initialize_role(session.role)
 end
 
