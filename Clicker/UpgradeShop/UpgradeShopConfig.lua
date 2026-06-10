@@ -13,7 +13,6 @@ Clicker/UpgradeShop/UpgradeShopConfig.lua
 ---@field effect_type string "click" | "passive" --缺少字面量类型
 ---@field effect_value integer
 ---@field base_price integer
----@field price_growth_percent integer
 ---@field initial_level integer
 ---@field max_level integer|nil
 ---@field unlock_total_brainrot integer
@@ -69,6 +68,7 @@ local UpgradeShopConfig = {
         },
     },
 
+    -- 注意：ITEMS 同时充当 id→配置 映射，依赖「商品 id == 数组下标」的隐式约定，新增商品时必须保持一致。
     ITEMS = {
         {
             id = 1,
@@ -79,12 +79,8 @@ local UpgradeShopConfig = {
             effect_type = "click",
             effect_value = 1,
             base_price = 50,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 0,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
         {
             id = 2,
@@ -95,12 +91,8 @@ local UpgradeShopConfig = {
             effect_type = "passive",
             effect_value = 1,
             base_price = 200,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 0,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
         {
             id = 3,
@@ -111,12 +103,8 @@ local UpgradeShopConfig = {
             effect_type = "click",
             effect_value = 5,
             base_price = 800,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 0,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
         {
             id = 4,
@@ -127,12 +115,8 @@ local UpgradeShopConfig = {
             effect_type = "passive",
             effect_value = 6,
             base_price = 3200,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 1000,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
         {
             id = 5,
@@ -143,12 +127,8 @@ local UpgradeShopConfig = {
             effect_type = "click",
             effect_value = 25,
             base_price = 12500,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 10000,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
         {
             id = 6,
@@ -159,12 +139,8 @@ local UpgradeShopConfig = {
             effect_type = "passive",
             effect_value = 100,
             base_price = 50000,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 50000,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
         {
             id = 7,
@@ -175,12 +151,8 @@ local UpgradeShopConfig = {
             effect_type = "click",
             effect_value = 100,
             base_price = 200000,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 100000,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
         {
             id = 8,
@@ -191,18 +163,10 @@ local UpgradeShopConfig = {
             effect_type = "passive",
             effect_value = 5000,
             base_price = 800000,
-            price_growth_percent = 115,
             initial_level = 0,
-            max_level = nil,
             unlock_total_brainrot = 250000,
-            icon_preset = nil,
-            locked_icon_preset = nil,
         },
     },
 }
-
-function UpgradeShopConfig.get_price_growth(item)
-    return item.price_growth_percent or UpgradeShopConfig.PRICE_GROWTH_PERCENT
-end
 
 return UpgradeShopConfig

@@ -13,11 +13,9 @@ local UpgradeShopConfig = require("Clicker.UpgradeShop.UpgradeShopConfig")
 ---@field description string
 ---@field price number
 ---@field level integer
----@field count integer
 ---@field icon_preset integer|nil
 ---@field unlocked boolean
 ---@field can_buy boolean
----@field max_level integer|nil
 ---@field unlock_total_brainrot number
 
 ---@class ShopDisplayData
@@ -42,7 +40,6 @@ end
 ---@return ShopItemState item_state
 local function get_item_state(state, item_id)
     state.shop.items[item_id] = state.shop.items[item_id] or {
-        count = 0,
         level = 0,
         current_price = 0,
     }
@@ -54,8 +51,7 @@ end
 function UpgradeShopSystem.initialize(state)
     for _, item_configuration in ipairs(UpgradeShopConfig.ITEMS) do
         local item_state = get_item_state(state, item_configuration.id)
-        item_state.count = item_configuration.initial_level or 0
-        item_state.level = item_configuration.initial_level or 0
+        item_state.level = item_configuration.initial_level
         item_state.current_price = item_configuration.base_price
     end
 end
@@ -65,12 +61,7 @@ end
 ---@param item_id integer
 ---@return boolean unlocked
 function UpgradeShopSystem.is_unlocked(state, item_id)
-    local item_configuration = UpgradeShopConfig.ITEMS[item_id]
-    if not item_configuration then
-        return false
-    end
-
-    return state.currency.total_brainrot >= item_configuration.unlock_total_brainrot
+    return state.currency.total_brainrot >= UpgradeShopConfig.ITEMS[item_id].unlock_total_brainrot
 end
 
 ---判断玩家当前是否可以买这个商品。
@@ -78,11 +69,11 @@ end
 ---@param item_id integer
 ---@return boolean can_buy
 function UpgradeShopSystem.can_buy(state, item_id)
-    local item_configuration = UpgradeShopConfig.ITEMS[item_id]
-    if not item_configuration or not UpgradeShopSystem.is_unlocked(state, item_id) then
+    if not UpgradeShopSystem.is_unlocked(state, item_id) then
         return false
     end
 
+    local item_configuration = UpgradeShopConfig.ITEMS[item_id]
     local item_state = get_item_state(state, item_id)
     if item_configuration.max_level and item_state.level >= item_configuration.max_level then
         return false
@@ -93,13 +84,9 @@ end
 
 ---@param state PlayerGameState
 ---@param item_id integer
----@return ShopItemDisplayData|nil display_data
+---@return ShopItemDisplayData display_data
 local function get_item_display_data(state, item_id)
     local item_configuration = UpgradeShopConfig.ITEMS[item_id]
-    if not item_configuration then
-        return nil
-    end
-
     local item_state = get_item_state(state, item_id)
     local unlocked = UpgradeShopSystem.is_unlocked(state, item_id)
     local icon_preset = item_configuration.locked_icon_preset
@@ -113,11 +100,9 @@ local function get_item_display_data(state, item_id)
         description = unlocked and item_configuration.description or item_configuration.locked_description,
         price = item_state.current_price,
         level = item_state.level,
-        count = item_state.count,
         icon_preset = icon_preset,
         unlocked = unlocked,
         can_buy = UpgradeShopSystem.can_buy(state, item_id),
-        max_level = item_configuration.max_level,
         unlock_total_brainrot = item_configuration.unlock_total_brainrot,
     }
 end
@@ -158,7 +143,6 @@ function UpgradeShopSystem.purchase(state, item_id)
         return { success = false, reason = "not_enough_brainrot" }
     end
 
-    item_state.count = item_state.count + 1
     item_state.level = item_state.level + 1
 
     if item_configuration.effect_type == "click" then
@@ -168,10 +152,7 @@ function UpgradeShopSystem.purchase(state, item_id)
             state.currency.brainrot_per_second + item_configuration.effect_value
     end
 
-    item_state.current_price = get_next_price(
-        item_state.current_price,
-        UpgradeShopConfig.get_price_growth(item_configuration)
-    )
+    item_state.current_price = get_next_price(item_state.current_price, UpgradeShopConfig.PRICE_GROWTH_PERCENT)
 
     return { success = true, reason = "ok" }
 end

@@ -34,6 +34,9 @@ local function fetch_child(parent, name)
     return node
 end
 
+-- 飘字颜色刷新（实现在飘字段；换肤成功时由 update_skin 调用）
+local float_apply_skin_color
+
 -- ============================================================
 -- 角色点击表现（原 CharacterView）
 -- ============================================================
@@ -41,7 +44,6 @@ end
 local character_cfg = ClickerConfig.CHARACTER
 local character_nodes = {}
 local effect_nodes = {}
-local squeeze_generations_by_role_id = {}
 local applied_tier_by_role_id = {}
 local active_burst_by_role_id = {}
 
@@ -54,7 +56,7 @@ end
 
 ---@param role Role
 local function play_burst(role)
-    if not role or not character_nodes.burst then
+    if not character_nodes.burst then
         return
     end
 
@@ -66,85 +68,40 @@ local function play_burst(role)
 end
 
 ---@param role Role
-local function play_squeeze(role)
-    local role_id = get_role_id(role)
-    if not role_id or not character_nodes.character_image or not character_nodes.character_image_small then
-        return
-    end
-
-    squeeze_generations_by_role_id[role_id] = (squeeze_generations_by_role_id[role_id] or 0) + 1
-    local animation_generation = squeeze_generations_by_role_id[role_id]
-    local current_lifecycle_generation = lifecycle_generation
-
-    role.set_node_visible(character_nodes.character_image, false)
-    role.set_node_visible(character_nodes.character_image_small, true)
-    LuaAPI.call_delay_frame(character_cfg.squeeze.delay_frames, function()
-        if lifecycle_generation ~= current_lifecycle_generation then
-            return
-        end
-        if squeeze_generations_by_role_id[role_id] ~= animation_generation then
-            return
-        end
-
-        role.set_node_visible(character_nodes.character_image_small, false)
-        role.set_image_color(character_nodes.character_image, character_cfg.squeeze.flash_color, math.tofixed(0))
-        role.set_node_visible(character_nodes.character_image, true)
-        role.set_image_color(
-            character_nodes.character_image,
-            character_cfg.squeeze.rest_color,
-            math.tofixed(character_cfg.squeeze.rest_transition)
-        )
-    end)
-end
-
----@param role Role
 local function play_click_animation_event(role)
-    if not role then
-        return
-    end
-
     local events = character_cfg.animation_events
-    if not events then
-        return
-    end
+    role.send_ui_custom_event(events.reset, {})
 
-    if events.reset then
-        role.send_ui_custom_event(events.reset, {})
-    end
-
-    if events.start then
-        local delay_frames = character_cfg.click_animation_start_delay_frames or 0
-        if delay_frames > 0 then
-            LuaAPI.call_delay_frame(delay_frames, function()
-                role.send_ui_custom_event(events.start, {})
-            end)
-        else
+    local delay_frames = character_cfg.click_animation_start_delay_frames
+    if delay_frames > 0 then
+        LuaAPI.call_delay_frame(delay_frames, function()
             role.send_ui_custom_event(events.start, {})
-        end
+        end)
+    else
+        role.send_ui_custom_event(events.start, {})
     end
 end
 
 ---绑定编辑器内的角色节点，并一次性创建皮肤特效节点。
 ---@param canvas ENode
 local function character_initialize(canvas)
-    squeeze_generations_by_role_id = {}
     applied_tier_by_role_id = {}
     active_burst_by_role_id = {}
     effect_nodes = {}
     character_nodes = {
-        full_background       = GameAPI.get_eui_child_by_name(canvas, character_cfg.nodes.full_background),
-        right_background      = GameAPI.get_eui_child_by_name(canvas, character_cfg.nodes.right_background),
-        burst                 = GameAPI.get_eui_child_by_name(canvas, character_cfg.nodes.burst),
-        animation_ring        = GameAPI.get_eui_child_by_name(canvas, character_cfg.nodes.animation_ring),
-        character_image       = GameAPI.get_eui_child_by_name(canvas, character_cfg.nodes.character_image),
-        character_image_small = GameAPI.get_eui_child_by_name(canvas, character_cfg.nodes.character_image_small),
-        click_button          = GameAPI.get_eui_child_by_name(canvas, character_cfg.nodes.click_button),
+        full_background       = fetch_child(canvas, character_cfg.nodes.full_background),
+        right_background      = fetch_child(canvas, character_cfg.nodes.right_background),
+        burst                 = fetch_child(canvas, character_cfg.nodes.burst),
+        animation_ring        = fetch_child(canvas, character_cfg.nodes.animation_ring),
+        character_image       = fetch_child(canvas, character_cfg.nodes.character_image),
+        character_image_small = fetch_child(canvas, character_cfg.nodes.character_image_small),
+        click_button          = fetch_child(canvas, character_cfg.nodes.click_button),
     }
 
     local to_fixed = math.tofixed
     local area = character_cfg.effect_area
-    for tier_index, skin in ipairs(character_cfg.skins or {}) do
-        if skin.effect_style and area then
+    for tier_index, skin in ipairs(character_cfg.skins) do
+        if skin.effect_style then
             effect_nodes[tier_index] = GameAPI.create_eui_effect_at_position(
                 skin.effect_style,
                 canvas,
@@ -152,7 +109,7 @@ local function character_initialize(canvas)
                 to_fixed(area.y),
                 to_fixed(area.w),
                 to_fixed(area.h),
-                character_cfg.effect_loop and true or false,
+                character_cfg.effect_loop,
                 "char_skin_fx_" .. tier_index
             )
         end
@@ -162,9 +119,6 @@ end
 ---初始化玩家自己的表现状态，皮肤应用前先隐藏特效。
 ---@param role Role
 local function character_initialize_role(role)
-    if not role then
-        return
-    end
     if character_nodes.character_image_small then
         role.set_node_visible(character_nodes.character_image_small, false)
     end
@@ -178,24 +132,19 @@ local function character_initialize_role(role)
     end
 end
 
----解析并应用玩家当前已解锁的最高皮肤。
+---解析并应用玩家当前已解锁的最高皮肤，换肤成功时同步刷新飘字颜色。
 ---@param role Role
 ---@param total_brainrot number
----@return boolean changed
 function ClickerView.update_skin(role, total_brainrot)
     local role_id = get_role_id(role)
     if not role_id then
-        return false
+        return
     end
 
     local skins = character_cfg.skins
-    if not skins or #skins == 0 then
-        return false
-    end
-
-    local tier_index = ClickerState.resolve_tier_index(skins, total_brainrot or 0)
+    local tier_index = ClickerState.resolve_tier_index(skins, total_brainrot)
     if applied_tier_by_role_id[role_id] == tier_index then
-        return false
+        return
     end
     applied_tier_by_role_id[role_id] = tier_index
 
@@ -239,16 +188,7 @@ function ClickerView.update_skin(role, total_brainrot)
     end
 
     active_burst_by_role_id[role_id] = skin.burst or character_cfg.burst
-    return true
-end
-
----取飘字颜色，跟当前皮肤的 burst 常态颜色保持一致。
----@param role Role
----@return integer color
-function ClickerView.get_active_float_color(role)
-    local role_id = get_role_id(role)
-    local burst = (role_id and active_burst_by_role_id[role_id]) or character_cfg.burst
-    return to_opaque(burst.rest_color)
+    float_apply_skin_color(role, role_id)
 end
 
 ---通过主控制器传入的注册函数绑定点击事件。
@@ -275,9 +215,6 @@ end
 function ClickerView.play_click_feedback(role)
     play_burst(role)
     play_click_animation_event(role)
-    if character_cfg.use_legacy_squeeze then
-        play_squeeze(role)
-    end
 end
 
 ---玩家离开时清理对应的皮肤状态。
@@ -287,7 +224,6 @@ local function character_cleanup_role(role)
     if not role_id then
         return
     end
-    squeeze_generations_by_role_id[role_id] = nil
     applied_tier_by_role_id[role_id] = nil
     active_burst_by_role_id[role_id] = nil
 end
@@ -384,20 +320,17 @@ local function float_initialize_role(role)
     float_nodes_by_role_id[role_id] = channels
 end
 
----修改玩家飘字颜色，描边保持不变。
+---换肤后刷新玩家飘字颜色，跟当前皮肤的 burst 常态颜色保持一致，描边不变。
 ---@param role Role
----@param color integer
-function ClickerView.set_color(role, color)
-    local role_id = get_role_id(role)
-    if not role_id then
-        return
-    end
-
+---@param role_id RoleID
+function float_apply_skin_color(role, role_id)
     local channels = float_nodes_by_role_id[role_id]
     if not channels then
         return
     end
 
+    local burst = active_burst_by_role_id[role_id] or character_cfg.burst
+    local color = to_opaque(burst.rest_color)
     local to_fixed = math.tofixed
     for _, label in pairs(channels) do
         role.set_label_color(label, color, to_fixed(0))
@@ -490,7 +423,6 @@ end
 ---游戏初始化时绑定编辑器内已搭好的 HUD 节点。
 ---@param canvas ENode
 local function hud_initialize(canvas)
-    hud_nodes.coin = fetch_child(canvas, hud_cfg.nodes.coin)
     hud_nodes.brainrot = fetch_child(canvas, hud_cfg.nodes.brainrot)
     hud_nodes.brainrot_per_second = fetch_child(canvas, hud_cfg.nodes.brainrot_per_second)
 end
@@ -498,10 +430,7 @@ end
 ---渲染单个玩家的 HUD 数值。
 ---@param role Role
 ---@param state PlayerGameState
-function ClickerView.render(role, state)
-    if not role or not state then
-        return
-    end
+function ClickerView.render_hud(role, state)
     if not hud_nodes.brainrot or not hud_nodes.brainrot_per_second then
         return
     end
@@ -522,8 +451,9 @@ local combo_max = ClickerConfig.COMBO.MAX
 local combo_nodes = {}
 local combo_anim_generations_by_role_id = {}
 
+---播放倍率标签的弹跳反馈；同一倍率档内再次点击时也会重播。
 ---@param role Role
-local function play_pop_animation(role)
+function ClickerView.pop(role)
     local role_id = get_role_id(role)
     if not role_id or not combo_nodes.label then
         return
@@ -601,7 +531,7 @@ end
 ---初始化单个玩家看到的连击表现。
 ---@param role Role
 local function combo_initialize_role(role)
-    if not role or not combo_nodes.bar then
+    if not combo_nodes.bar then
         return
     end
 
@@ -617,7 +547,7 @@ end
 ---@param role Role
 ---@param state PlayerGameState
 function ClickerView.render_progress(role, state)
-    if not role or not combo_nodes.bar then
+    if not combo_nodes.bar then
         return
     end
 
@@ -630,7 +560,7 @@ end
 ---@param old_tier integer
 ---@param new_tier integer
 function ClickerView.handle_tier_change(role, old_tier, new_tier)
-    if not role or not combo_nodes.label then
+    if not combo_nodes.label then
         return
     end
 
@@ -648,13 +578,7 @@ function ClickerView.handle_tier_change(role, old_tier, new_tier)
     role.set_label_text(combo_nodes.label, combo_cfg.tier_texts[new_tier])
     role.set_label_color(combo_nodes.label, combo_cfg.tier_colors[new_tier], math.tofixed(0))
     role.set_node_visible(combo_nodes.label, true)
-    play_pop_animation(role)
-end
-
----同一倍率档内再次点击时重播反馈。
----@param role Role
-function ClickerView.pop(role)
-    play_pop_animation(role)
+    ClickerView.pop(role)
 end
 
 -- ============================================================
@@ -691,7 +615,6 @@ end
 ---关闭玩法时让所有延迟回调失效并清理段内状态。
 function ClickerView.shutdown()
     lifecycle_generation = lifecycle_generation + 1
-    squeeze_generations_by_role_id = {}
     applied_tier_by_role_id = {}
     active_burst_by_role_id = {}
     float_anim_generations_by_role_id = {}

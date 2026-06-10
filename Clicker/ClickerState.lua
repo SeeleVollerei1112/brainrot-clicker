@@ -16,7 +16,6 @@ local ClickerConfig = require("Clicker.ClickerConfig")
 ---@field brainrot_per_second number
 
 ---@class ShopItemState
----@field count integer
 ---@field level integer
 ---@field current_price number
 
@@ -26,18 +25,15 @@ local ClickerConfig = require("Clicker.ClickerConfig")
 ---@class ComboState
 ---@field count number
 ---@field multiplier number
----@field tick_counter integer
----@field last_click_tick integer
 
----@class EasterEggState
----@field active boolean
----@field brainrot_per_second_bonus_active boolean
+---@class ClickerUiState
+---@field canvas_open boolean 点击画布是否打开
 
 ---@class PlayerGameState
 ---@field currency CurrencyState
 ---@field shop ShopState
 ---@field combo ComboState
----@field easter_egg EasterEggState
+---@field ui ClickerUiState
 
 ---@class ComboUpdateResult
 ---@field state_changed boolean
@@ -65,14 +61,11 @@ function ClickerState.new()
             items = {},
         },
         combo = {
-            count = initial.combo_count,
-            multiplier = initial.combo_multiplier,
-            tick_counter = initial.tick_counter,
-            last_click_tick = initial.tick_counter,
+            count = 0,
+            multiplier = 1,
         },
-        easter_egg = {
-            active = false,
-            brainrot_per_second_bonus_active = false,
+        ui = {
+            canvas_open = false,
         },
     }
 end
@@ -105,10 +98,6 @@ end
 ---@return number income
 function ClickerState.add_click_income(state)
     local income = state.currency.click_power * state.combo.multiplier
-    if income < 1 then
-        income = 1
-    end
-
     ClickerState.add_brainrot(state, income)
     return income
 end
@@ -120,10 +109,6 @@ function ClickerState.add_passive_income(state)
     local income = state.currency.brainrot_per_second
     if income <= 0 then
         return 0
-    end
-
-    if state.easter_egg.brainrot_per_second_bonus_active then
-        income = income * ClickerConfig.PASSIVE_INCOME.easter_bonus_multiplier
     end
 
     ClickerState.add_brainrot(state, income)
@@ -157,8 +142,6 @@ function ClickerState.add_combo_click(state)
     local combo = ClickerConfig.COMBO
     local old_tier = get_tier(state.combo.count)
     state.combo.count = math.min(state.combo.count + combo.CLICK_GAIN, combo.MAX)
-    state.combo.last_click_tick = state.combo.tick_counter
-
     local new_tier = get_tier(state.combo.count)
     set_multiplier(state, new_tier)
     return {
@@ -174,7 +157,6 @@ end
 ---@param state PlayerGameState
 ---@return ComboUpdateResult result
 function ClickerState.decay_combo(state)
-    state.combo.tick_counter = state.combo.tick_counter + 1
     if state.combo.count <= 0 then
         return {
             state_changed = false,
@@ -207,13 +189,8 @@ end
 ---@return integer tier_index
 function ClickerState.resolve_tier_index(skins, value)
     local tier_index = 1
-    if not skins then
-        return tier_index
-    end
-
     for index = 1, #skins do
-        local skin = skins[index]
-        if skin and value >= (skin.threshold or 0) then
+        if value >= skins[index].threshold then
             tier_index = index
         else
             break

@@ -25,9 +25,6 @@ SessionStateRegistry.declare("clicker", {
     end,
 })
 
-ClickerController.PASSIVE_INCOME_INTERVAL = ClickerConfig.PASSIVE_INCOME.tick_interval
-ClickerController.COMBO_INTERVAL = ClickerConfig.COMBO.TICK_INTERVAL
-
 ---@type fun(role: Role): PlayerSession|nil
 local find_session = nil
 
@@ -60,9 +57,7 @@ end
 ---@param session PlayerSession
 local function refresh_skin(session)
     local state = session:get_or_create_state("clicker")
-    if ClickerView.update_skin(session.role, state.currency.total_brainrot) then
-        ClickerView.set_color(session.role, ClickerView.get_active_float_color(session.role))
-    end
+    ClickerView.update_skin(session.role, state.currency.total_brainrot)
 end
 
 ---@param session PlayerSession
@@ -73,8 +68,8 @@ function ClickerController.handle_character_click(session)
     ClickerView.show(role, income)
     ClickerView.play_click_feedback(role)
     refresh_skin(session)
-    ClickerView.render(role, state)
-    if session.click_canvas_open then
+    ClickerView.render_hud(role, state)
+    if state.ui.canvas_open then
         render_shop(session)
     end
 
@@ -93,22 +88,23 @@ function ClickerController.handle_shop_purchase(session, item_id)
         )
     end
 
-    ClickerView.render(session.role, state)
+    ClickerView.render_hud(session.role, state)
     render_shop(session)
 end
 
 ---@param session PlayerSession
 function ClickerController.handle_open_click_canvas(session)
     local role = session.role
-    session.click_canvas_open = true
+    local state = session:get_or_create_state("clicker")
+    state.ui.canvas_open = true
     role.send_ui_custom_event(ClickerConfig.EVENTS.open_click_canvas, {})
-    ClickerView.render(role, session:get_or_create_state("clicker"))
+    ClickerView.render_hud(role, state)
     render_shop(session)
 end
 
 ---@param session PlayerSession
 function ClickerController.handle_close_click_canvas(session)
-    session.click_canvas_open = false
+    session:get_or_create_state("clicker").ui.canvas_open = false
     session.role.send_ui_custom_event(ClickerConfig.EVENTS.close_click_canvas, {})
 end
 
@@ -161,9 +157,9 @@ end
 function ClickerController.tick_passive_income(session)
     local state = session:get_or_create_state("clicker")
     ClickerState.add_passive_income(state)
-    ClickerView.render(session.role, state)
+    ClickerView.render_hud(session.role, state)
     refresh_skin(session)
-    if session.click_canvas_open then
+    if state.ui.canvas_open then
         render_shop(session)
     end
 end
@@ -194,13 +190,13 @@ function ClickerController.initialize(application)
 
     -- 被动收益与连击衰减定时器（自注册：间隔/回调/会话遍历都收归本控制器）
     register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.PASSIVE_INCOME_INTERVAL) },
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerConfig.PASSIVE_INCOME.tick_interval) },
         function()
             application.sessions.for_each(ClickerController.tick_passive_income)
         end
     )
     register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerController.COMBO_INTERVAL) },
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(ClickerConfig.COMBO.TICK_INTERVAL) },
         function()
             application.sessions.for_each(ClickerController.tick_combo_decay)
         end
@@ -210,7 +206,7 @@ end
 ---@param session PlayerSession
 function ClickerController.setup_session(session)
     local role = session.role
-    ClickerView.render(role, session:get_or_create_state("clicker"))
+    ClickerView.render_hud(role, session:get_or_create_state("clicker"))
     ClickerView.initialize_role(role)
     refresh_skin(session)
     UpgradeShopView.initialize_role(role)

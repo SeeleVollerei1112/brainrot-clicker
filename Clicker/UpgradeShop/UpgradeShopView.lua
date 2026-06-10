@@ -28,7 +28,7 @@ local click_power_label = nil
 ---@param name string
 ---@return ENode|nil node
 local function find_node(parent, name)
-    local node = UINodes[name] or (parent and GameAPI.get_eui_child_by_name(parent, name)) or nil
+    local node = UINodes[name] or (parent and GameAPI.get_eui_child_by_name(parent, name))
     if not node then
         LuaAPI.log("[UpgradeShopView] 缺少静态节点: " .. name, 1)
     end
@@ -59,20 +59,14 @@ local function set_card_text_style(role, card)
     style_card_label(role, card.level, colors.text_blue, label_configuration.level_size)
 end
 
+-- 卡片子节点字段名：遍历设置可见性/触摸状态时共用
+local CARD_CHILD_KEYS = { "background", "slot", "icon", "coin", "name", "description", "price", "level" }
+
 ---@param role Role
 ---@param card table
 local function disable_card_child_touch(role, card)
-    local child_nodes = {
-        card.background,
-        card.slot,
-        card.icon,
-        card.coin,
-        card.name,
-        card.description,
-        card.price,
-        card.level,
-    }
-    for _, node in ipairs(child_nodes) do
+    for _, key in ipairs(CARD_CHILD_KEYS) do
+        local node = card[key]
         if node then
             role.set_node_touch_enabled(node, false)
         end
@@ -122,14 +116,12 @@ end
 ---@param visible boolean
 local function set_slot_visible(role, card, visible)
     role.set_node_visible(card.container, visible)
-    if card.background then role.set_node_visible(card.background, visible) end
-    if card.slot then role.set_node_visible(card.slot, visible) end
-    if card.icon then role.set_node_visible(card.icon, visible) end
-    if card.coin then role.set_node_visible(card.coin, visible) end
-    if card.name then role.set_node_visible(card.name, visible) end
-    if card.description then role.set_node_visible(card.description, visible) end
-    if card.price then role.set_node_visible(card.price, visible) end
-    if card.level then role.set_node_visible(card.level, visible) end
+    for _, key in ipairs(CARD_CHILD_KEYS) do
+        local node = card[key]
+        if node then
+            role.set_node_visible(node, visible)
+        end
+    end
 end
 
 ---@param role Role
@@ -238,7 +230,6 @@ end
 ---@param display_data ShopDisplayData
 function UpgradeShopView.render(role, display_data)
     local to_fixed = math.tofixed
-    hide_unused_slots(role)
     if click_power_label then
         role.set_label_text(click_power_label, configuration.title_prefix .. tostring(display_data.click_power))
     end
@@ -269,9 +260,7 @@ function UpgradeShopView.render(role, display_data)
                 if card.coin then role.set_node_visible(card.coin, false) end
             end
 
-            local at_max_level =
-                item_display_data.max_level and item_display_data.level >= item_display_data.max_level
-            local enabled = item_display_data.can_buy and not at_max_level
+            local enabled = item_display_data.can_buy
             role.set_node_touch_enabled(card.container, enabled)
             if card.background then
                 role.set_image_color(card.background, enabled and colors.card_ready or colors.card_locked, to_fixed(0))
@@ -281,8 +270,6 @@ function UpgradeShopView.render(role, display_data)
                     to_fixed(enabled and opacity_configuration.visible or opacity_configuration.locked_icon))
             end
             local detail_color = enabled and colors.text_dark or colors.text_grey
-            if card.name then role.set_label_color(card.name, colors.text_dark, to_fixed(0)) end
-            if card.description then role.set_label_color(card.description, colors.text_dark, to_fixed(0)) end
             if card.price then role.set_label_color(card.price, detail_color, to_fixed(0)) end
             if card.level then
                 role.set_label_color(card.level, enabled and colors.text_blue or colors.text_grey, to_fixed(0))
