@@ -20,7 +20,8 @@ Booth/BoothPersistence.lua
 对象键统一转成字符串，避免编码器把整数键表误判成数组；只有 zones 是 JSON 数组。
 ]]
 
-local ArchiveKeys = require("Data.ArchiveKeys")
+-- 存档槽位以编辑器自动导出的 ArchivesData 为唯一真相（含收益游标 last_ts 与背包 inventory 字段）
+local BOOTH_ARCHIVE = require("Data.ArchivesData")["展台状态"]
 local BoothConfig = require("Booth.BoothConfig")
 local BoothState = require("Booth.BoothState")
 local Json = require("Util.Json")
@@ -150,7 +151,7 @@ local function preserve_inventory_blob(role, booth_blob)
         return booth_blob
     end
 
-    local current_blob = role.get_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id)
+    local current_blob = role.get_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id)
     if type(current_blob) ~= "string" or current_blob == "" then
         return booth_blob
     end
@@ -273,7 +274,7 @@ function BoothPersistence.save(role, state)
         return
     end
     local blob = preserve_inventory_blob(role, BoothPersistence.to_json(state))
-    role.set_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id, blob)
+    role.set_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id, blob)
     LuaAPI.log("[BoothPersistence] 已保存展台存档: " .. blob, 0)
 end
 
@@ -283,7 +284,7 @@ function BoothPersistence.load(role)
     if not role or not archives_ready() or not role.has_saved_archive() then
         return BoothState.new()
     end
-    local blob = role.get_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id)
+    local blob = role.get_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id)
     if type(blob) ~= "string" or blob == "" then
         return BoothState.new()
     end

@@ -5,7 +5,8 @@ Inventory/ItemSynthesisSystem.lua
 物品实例属性只写入/读取 Equipment 自定义 KV，不再写入物品描述。
 ]]
 
-local ArchiveKeys = require("Data.ArchiveKeys")
+-- 与展台共用同一存档槽位（read-merge-write 各管各的字段），槽位以 ArchivesData 为唯一真相
+local BOOTH_ARCHIVE = require("Data.ArchivesData")["展台状态"]
 local BoothConfig = require("Booth.BoothConfig")
 local ItemSynthesisConfig = require("Inventory.ItemSynthesisConfig")
 local Json = require("Util.Json")
@@ -225,7 +226,7 @@ local function load_archive_root(role)
     if not role or not role.has_saved_archive() then
         return {}
     end
-    local blob = role.get_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id)
+    local blob = role.get_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id)
     if type(blob) ~= "string" or blob == "" then
         return {}
     end
@@ -305,7 +306,7 @@ function ItemSynthesisSystem.save_role_inventory(role)
         stacks = collect_saved_stacks(role),
     }
     local blob = Json.encode(data)
-    role.set_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id, blob)
+    role.set_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id, blob)
     LuaAPI.log("[ItemSynthesisSystem] 已保存合成物品栏: " .. blob, 0)
 end
 
