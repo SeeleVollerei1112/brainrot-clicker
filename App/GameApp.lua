@@ -7,16 +7,31 @@ App/GameApp.lua
 
 local ControllerRegistry = require("App.ControllerRegistry")
 local PlayerSessionRegistry = require("App.PlayerSessionRegistry")
+local SessionStateRegistry = require("App.SessionStateRegistry")
 local TriggerRegistry = require("App.TriggerRegistry")
 
 ---@class PlayerSession
 ---@field role Role 玩家对象
----@field state PlayerGameState 玩家运行时状态
+---@field states table<string, any> 各功能状态片（键与工厂见 SessionStateRegistry 声明）
 ---@field click_canvas_open boolean 点击界面是否打开
+---@field get_or_create_state fun(self: PlayerSession, key: string): any
 
 local GameApp = {}
 
 local initialized = false
+
+---惰性取功能状态片：首次访问时调用 SessionStateRegistry 声明的工厂创建。
+---@param self PlayerSession
+---@param key string
+---@return any state
+local function get_or_create_state(self, key)
+    local state = self.states[key]
+    if state == nil then
+        state = SessionStateRegistry.create(key, self)
+        self.states[key] = state
+    end
+    return state
+end
 
 ---@class Application
 ---@field register_trigger fun(event_arguments: table, callback: function): integer
@@ -45,14 +60,15 @@ function GameApp.get_or_create_player_session(role)
     local session = PlayerSessionRegistry.find_by_role(role)
     if session then return session end
 
-    local state = ControllerRegistry.create_player_state()
     session = {
         role = role,
-        state = state,
+        states = {},
         click_canvas_open = false,
+        get_or_create_state = get_or_create_state,
     }
 
     PlayerSessionRegistry.set(session)
+    SessionStateRegistry.restore_all(session)
     ControllerRegistry.setup_session(session)
     register_role_exit_handler(role)
     LuaAPI.log("[GameApp] 玩家会话已创建: " .. tostring(role_id), 0)
@@ -67,6 +83,7 @@ function GameApp.remove_player_session(role)
     if not session then return end
 
     ControllerRegistry.cleanup_session(session)
+    SessionStateRegistry.save_all(session)
     LuaAPI.log("[GameApp] 玩家会话已移除: " .. tostring(role_id), 0)
 end
 

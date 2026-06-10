@@ -9,11 +9,21 @@ local AppConfig = require("App.AppConfig")
 local ClickerConfig = require("Clicker.ClickerConfig")
 local ClickerState = require("Clicker.ClickerState")
 local ClickerView = require("Clicker.ClickerView")
+local SessionStateRegistry = require("App.SessionStateRegistry")
 local UINodes = require("Data.UINodes")
 local UpgradeShopView = require("Clicker.UpgradeShop.UpgradeShopView")
 local UpgradeShopSystem = require("Clicker.UpgradeShop.UpgradeShopSystem")
 
 local ClickerController = {}
+
+-- 点击玩法状态片：纯内存态，不持久化。
+SessionStateRegistry.declare("clicker", {
+    create = function()
+        local state = ClickerState.new()
+        UpgradeShopSystem.initialize(state)
+        return state
+    end,
+})
 
 ClickerController.PASSIVE_INCOME_INTERVAL = ClickerConfig.PASSIVE_INCOME.tick_interval
 ClickerController.COMBO_INTERVAL = ClickerConfig.COMBO.TICK_INTERVAL
@@ -26,7 +36,10 @@ local exit_button = nil
 
 ---@param session PlayerSession
 local function render_shop(session)
-    UpgradeShopView.render(session.role, UpgradeShopSystem.get_display_data(session.state))
+    UpgradeShopView.render(
+        session.role,
+        UpgradeShopSystem.get_display_data(session:get_or_create_state("clicker"))
+    )
 end
 
 ---@param session PlayerSession
@@ -36,7 +49,7 @@ local function render_combo_update(session, result)
         return
     end
 
-    ClickerView.render_progress(session.role, session.state)
+    ClickerView.render_progress(session.role, session:get_or_create_state("clicker"))
     if result.tier_changed then
         ClickerView.handle_tier_change(session.role, result.old_tier, result.new_tier)
     elseif result.should_pop then
@@ -46,7 +59,8 @@ end
 
 ---@param session PlayerSession
 local function refresh_skin(session)
-    if ClickerView.update_skin(session.role, session.state.currency.total_brainrot) then
+    local state = session:get_or_create_state("clicker")
+    if ClickerView.update_skin(session.role, state.currency.total_brainrot) then
         ClickerView.set_color(session.role, ClickerView.get_active_float_color(session.role))
     end
 end
@@ -58,16 +72,17 @@ function ClickerController.handle_character_click(session)
     end
 
     local role = session.role
-    local income = ClickerState.add_click_income(session.state)
+    local state = session:get_or_create_state("clicker")
+    local income = ClickerState.add_click_income(state)
     ClickerView.show(role, income)
     ClickerView.play_click_feedback(role)
     refresh_skin(session)
-    ClickerView.render(role, session.state)
+    ClickerView.render(role, state)
     if session.click_canvas_open then
         render_shop(session)
     end
 
-    render_combo_update(session, ClickerState.add_combo_click(session.state))
+    render_combo_update(session, ClickerState.add_combo_click(state))
 end
 
 ---@param session PlayerSession
@@ -77,7 +92,8 @@ function ClickerController.handle_shop_purchase(session, item_id)
         return
     end
 
-    local result = UpgradeShopSystem.purchase(session.state, item_id)
+    local state = session:get_or_create_state("clicker")
+    local result = UpgradeShopSystem.purchase(state, item_id)
     if not result.success then
         LuaAPI.log(
             "[ClickerController] 购买失败 item=" .. tostring(item_id) .. " reason=" .. result.reason,
@@ -85,7 +101,7 @@ function ClickerController.handle_shop_purchase(session, item_id)
         )
     end
 
-    ClickerView.render(session.role, session.state)
+    ClickerView.render(session.role, state)
     render_shop(session)
 end
 
@@ -98,7 +114,7 @@ function ClickerController.handle_open_click_canvas(session)
     local role = session.role
     session.click_canvas_open = true
     role.send_ui_custom_event(ClickerConfig.EVENTS.open_click_canvas, {})
-    ClickerView.render(role, session.state)
+    ClickerView.render(role, session:get_or_create_state("clicker"))
     render_shop(session)
 end
 
@@ -159,8 +175,9 @@ end
 
 ---@param session PlayerSession
 function ClickerController.tick_passive_income(session)
-    ClickerState.add_passive_income(session.state)
-    ClickerView.render(session.role, session.state)
+    local state = session:get_or_create_state("clicker")
+    ClickerState.add_passive_income(state)
+    ClickerView.render(session.role, state)
     refresh_skin(session)
     if session.click_canvas_open then
         render_shop(session)
@@ -169,7 +186,7 @@ end
 
 ---@param session PlayerSession
 function ClickerController.tick_combo_decay(session)
-    render_combo_update(session, ClickerState.decay_combo(session.state))
+    render_combo_update(session, ClickerState.decay_combo(session:get_or_create_state("clicker")))
 end
 
 ---@param application Application
@@ -206,15 +223,10 @@ function ClickerController.initialize(application)
     )
 end
 
----@param state PlayerGameState
-function ClickerController.initialize_state(state)
-    UpgradeShopSystem.initialize(state)
-end
-
 ---@param session PlayerSession
 function ClickerController.setup_session(session)
     local role = session.role
-    ClickerView.render(role, session.state)
+    ClickerView.render(role, session:get_or_create_state("clicker"))
     ClickerView.initialize_role(role)
     refresh_skin(session)
     UpgradeShopView.initialize_role(role)

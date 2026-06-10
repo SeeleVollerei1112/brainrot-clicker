@@ -19,7 +19,6 @@ local ClickerController = require("Clicker.ClickerController")
 local InventoryController = require("Inventory.InventoryController")
 local LotteryController = require("Lottery.LotteryController")
 local MallController = require("Mall.MallController")
-local ClickerState = require("Clicker.ClickerState")
 
 local ControllerRegistry = {}
 
@@ -31,13 +30,6 @@ local controllers = {
     InventoryController,
     BoothController,
 }
-
----@return PlayerGameState state
-function ControllerRegistry.create_player_state()
-    local state = ClickerState.new()
-    ClickerController.initialize_state(state)
-    return state
-end
 
 ---@param application Application
 function ControllerRegistry.initialize_all(application)
