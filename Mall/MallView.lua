@@ -26,25 +26,12 @@ local sidebar = nil
 ---@type table<string, { config:MallTabConfig, listview:ENode, button:ENode, label:ENode, cards:table }>
 local tabs = {}
 
----@param node any
----@return boolean
-local function is_node(node)
-    return node ~= nil and node ~= false and node ~= 0 and node ~= ""
-end
-
 ---取直接子节点（父无效则返回 nil）。
 ---@param parent ENode|nil
 ---@param name string
 ---@return ENode|nil
 local function child(parent, name)
-    if not is_node(parent) then
-        return nil
-    end
-    local node = GameAPI.get_eui_child_by_name(parent, name)
-    if not is_node(node) then
-        return nil
-    end
-    return node
+    return parent and GameAPI.get_eui_child_by_name(parent, name) or nil
 end
 
 ---绑定单个标签页内第 index 个商品项的全部节点。
@@ -58,7 +45,7 @@ local function bind_item(tcfg, listview, item)
     local row = child(listview, row_name)
     -- 优先 row->item；若引擎按名递归也可直接 listview->item 兜底。
     local container = child(row, MallConfig.item_name(tcfg, i)) or child(listview, MallConfig.item_name(tcfg, i))
-    if not is_node(container) then
+    if not container then
         LuaAPI.log("[MallView] 缺少商品容器: " .. MallConfig.item_name(tcfg, i), 1)
         return nil
     end
@@ -76,16 +63,10 @@ local function bind_item(tcfg, listview, item)
         coin = child(container, MallConfig.child_name(tcfg, ui.child_base.coin, i)),
         buy = child(container, MallConfig.buy_name(tcfg, i)),
     }
-    if not is_node(card.buy) then
+    if not card.buy then
         LuaAPI.log("[MallView] 缺少购买按钮: " .. MallConfig.buy_name(tcfg, i), 1)
     end
     return card
-end
-
----返回商城画布节点（供控制器开关画布用）。
----@return ENode|nil
-function MallView.get_canvas()
-    return UINodes[MallConfig.CANVAS_NAME]
 end
 
 ---一次性绑定商城画布的静态节点。GAME_INIT 时调用。
@@ -99,7 +80,7 @@ function MallView.initialize()
         local label = UINodes[tcfg.label] or child(button, tcfg.label)
         local entry = { config = tcfg, listview = listview, button = button, label = label, cards = {} }
 
-        if is_node(listview) then
+        if listview then
             for _, item in ipairs(tcfg.items) do
                 local card = bind_item(tcfg, listview, item)
                 if card then
@@ -128,11 +109,11 @@ function MallView.initialize_role(role)
         if entry then
             -- 关闭标签文字(label)的触摸，让点击穿透 label 命中背后的标签按钮(btn)。
             -- label 渲染不受影响，仍正常显示文字与选中底色。
-            if is_node(entry.label) then
+            if entry.label then
                 role.set_node_touch_enabled(entry.label, false)
             end
             for _, card in pairs(entry.cards) do
-                if is_node(card.buy) then
+                if card.buy then
                     role.set_button_text(card.buy, ui.buy.text)
                 end
             end
@@ -154,11 +135,11 @@ function MallView.render(role, display_data)
             for _, idd in ipairs(tabdd.items) do
                 local card = entry.cards[idd.index]
                 if card then
-                    if is_node(card.name) then role.set_label_text(card.name, idd.name) end
-                    if is_node(card.description) then role.set_label_text(card.description, idd.description) end
-                    if is_node(card.price) then role.set_label_text(card.price, tostring(idd.price)) end
+                    if card.name then role.set_label_text(card.name, idd.name) end
+                    if card.description then role.set_label_text(card.description, idd.description) end
+                    if card.price then role.set_label_text(card.price, tostring(idd.price)) end
                     -- nil 表示沿用编辑器原贴图。
-                    if idd.icon_preset and is_node(card.icon) then
+                    if idd.icon_preset and card.icon then
                         role.set_image_texture_by_key_with_auto_resize(card.icon, idd.icon_preset, false)
                     end
                 end
@@ -183,16 +164,16 @@ function MallView.select_tab(role, tab_key)
 
             -- 显隐对应页：set_node_visible 会一并移除隐藏页的触摸/滚动响应，
             -- 避免隐藏页遮挡选中页的点击与列表滑动（透明度方案无法做到，故不用 opacity）。
-            if is_node(entry.listview) then
+            if entry.listview then
                 role.set_node_visible(entry.listview, selected)
             end
 
-            if is_node(entry.label) then
+            if entry.label then
                 -- 文字变色：选中黑 / 未选中白（label 触摸已在 initialize_role 关闭，点击穿透到按钮）
                 role.set_label_color(entry.label, selected and ui.tab.text_selected or ui.tab.text_unselected, tf(0))
             end
 
-            if is_node(entry.button) then
+            if entry.button then
                 -- 选中底框：用按钮自身不透明度显隐（opacity=0 仍可点击，保证未选中页可被切回）
                 role.set_ui_opacity(entry.button,
                     tf(selected and ui.tab.btn_opacity_selected or ui.tab.btn_opacity_unselected))
@@ -221,7 +202,7 @@ function MallView.bind_buy_handler(on_buy, register_trigger)
         if entry then
             for _, item in ipairs(tcfg.items) do
                 local card = entry.cards[item.index]
-                if card and is_node(card.buy) then
+                if card and card.buy then
                     local item_id = item.id
                     register_trigger(
                         { EVENT.EUI_NODE_TOUCH_EVENT, card.buy, TOUCH_CLICK },
@@ -245,7 +226,7 @@ function MallView.bind_tab_handler(on_select, register_trigger)
     for _, tcfg in ipairs(MallConfig.TABS) do
         local entry = tabs[tcfg.key]
         local button = entry and entry.button
-        if is_node(button) then
+        if button then
             local tab_key = tcfg.key
             register_trigger(
                 { EVENT.EUI_NODE_TOUCH_EVENT, button, TOUCH_CLICK },

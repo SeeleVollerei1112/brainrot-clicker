@@ -40,12 +40,6 @@ local place_button = nil
 local recycle_button = nil
 local synthesis_button = nil
 
----@param node any
----@return boolean
-local function is_node(node)
-    return node ~= nil and node ~= false and node ~= 0 and node ~= ""
-end
-
 ---@param role Role
 ---@return RoleID|nil
 local function get_role_id(role)
@@ -87,13 +81,13 @@ local function update_buttons(role, zone_id, booth_index)
         can_synthesize = select(1, placement.can_synthesize_with_selected(role, zone_id, booth_index))
     end
 
-    if is_node(place_button) then
+    if place_button then
         role.set_node_visible(place_button, can_place)
     end
-    if is_node(recycle_button) then
+    if recycle_button then
         role.set_node_visible(recycle_button, occupied)
     end
-    if is_node(synthesis_button) then
+    if synthesis_button then
         role.set_node_visible(synthesis_button, can_synthesize)
     end
 end
@@ -101,13 +95,13 @@ end
 ---隐藏所有交互按钮。
 ---@param role Role
 local function hide_buttons(role)
-    if is_node(place_button) then
+    if place_button then
         role.set_node_visible(place_button, false)
     end
-    if is_node(recycle_button) then
+    if recycle_button then
         role.set_node_visible(recycle_button, false)
     end
-    if is_node(synthesis_button) then
+    if synthesis_button then
         role.set_node_visible(synthesis_button, false)
     end
 end
@@ -200,7 +194,7 @@ end
 ---注册放置/回收/合成按钮点击。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 local function bind_buttons(register_trigger)
-    if is_node(place_button) then
+    if place_button then
         register_trigger(
             { EVENT.EUI_NODE_TOUCH_EVENT, place_button, TOUCH_CLICK },
             function(event_name, actor, data)
@@ -213,7 +207,7 @@ local function bind_buttons(register_trigger)
         LuaAPI.log("[BoothInteraction] 缺少放置按钮节点(待导出): " .. tostring(BoothConfig.UI.place_button), 1)
     end
 
-    if is_node(recycle_button) then
+    if recycle_button then
         register_trigger(
             { EVENT.EUI_NODE_TOUCH_EVENT, recycle_button, TOUCH_CLICK },
             function(event_name, actor, data)
@@ -226,7 +220,7 @@ local function bind_buttons(register_trigger)
         LuaAPI.log("[BoothInteraction] 缺少回收按钮节点(待导出): " .. tostring(BoothConfig.UI.recycle_button), 1)
     end
 
-    if is_node(synthesis_button) then
+    if synthesis_button then
         register_trigger(
             { EVENT.EUI_NODE_TOUCH_EVENT, synthesis_button, TOUCH_CLICK },
             function(event_name, actor, data)

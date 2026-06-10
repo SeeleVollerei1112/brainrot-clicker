@@ -27,18 +27,12 @@ local function get_role_id(role)
     return control_unit and control_unit.get_role_id() or nil
 end
 
----@param node any
----@return boolean valid
-local function is_node(node)
-    return node ~= nil and node ~= false and node ~= 0 and node ~= ""
-end
-
 ---@param parent ENode
 ---@param name string
 ---@return ENode|nil node
 local function fetch_child(parent, name)
     local node = GameAPI.get_eui_child_by_name(parent, name)
-    if not is_node(node) then
+    if not node then
         LuaAPI.log("[ClickerView] 缺少静态节点: " .. name, 1)
         return nil
     end
@@ -483,7 +477,7 @@ function ClickerView.render(role, state)
     if not role or not state then
         return
     end
-    if not is_node(hud_nodes.brainrot) or not is_node(hud_nodes.brainrot_per_second) then
+    if not hud_nodes.brainrot or not hud_nodes.brainrot_per_second then
         return
     end
 

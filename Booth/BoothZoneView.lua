@@ -67,25 +67,12 @@ local function slot_key(zone_id, booth_index)
     return tostring(zone_id) .. "|" .. tostring(booth_index)
 end
 
----@param node any
----@return boolean
-local function is_node(node)
-    return node ~= nil and node ~= false and node ~= 0 and node ~= ""
-end
-
----读取头顶 3D 界面预设编号；未导出(Data/Prefab.lua 无 scene_eui 表或缺键)时返回 nil。
----@return any|nil layer_key
-local function head_layer_key()
-    local scene_eui = PrefabData.scene_eui
-    return scene_eui and scene_eui[BoothConfig.HEAD_UI.layer_name] or nil
-end
-
 ---@param layer any
 ---@param node_name string|nil
 ---@return any|nil node
 local function get_scene_ui_node(layer, node_name)
     local node_id = node_name and UINodes[node_name]
-    if not is_node(node_id) then
+    if not node_id then
         return nil
     end
     return GameAPI.get_eui_node_at_scene_ui(layer, node_id)
@@ -268,7 +255,9 @@ function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
         return
     end
 
-    local layer_key = head_layer_key()
+    -- 头顶 3D 界面预设编号；未导出(Data/Prefab.lua 无 scene_eui 表或缺键)时跳过。
+    local scene_eui = PrefabData.scene_eui
+    local layer_key = scene_eui and scene_eui[BoothConfig.HEAD_UI.layer_name] or nil
     if not layer_key then
         if not head_missing_logged then
             head_missing_logged = true

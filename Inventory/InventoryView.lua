@@ -35,12 +35,6 @@ local TABS = {
 ---@type table<string, { button:ENode, label:ENode, listview:ENode }>
 local tabs = {}
 
----@param node any
----@return boolean
-local function is_node(node)
-    return node ~= nil and node ~= false and node ~= 0 and node ~= ""
-end
-
 ---一次性绑定背包标签静态节点。GAME_INIT 时调用。
 function InventoryView.initialize()
     tabs = {}
@@ -50,10 +44,10 @@ function InventoryView.initialize()
             label = UINodes[tcfg.label],
             listview = UINodes[tcfg.listview],
         }
-        if not is_node(entry.button) then
+        if not entry.button then
             LuaAPI.log("[InventoryView] 缺少标签按钮: " .. tcfg.button, 1)
         end
-        if not is_node(entry.listview) then
+        if not entry.listview then
             LuaAPI.log("[InventoryView] 缺少标签列表节点: " .. tcfg.listview, 1)
         end
         tabs[tcfg.key] = entry
@@ -82,16 +76,16 @@ function InventoryView.select_tab(role, tab_key)
             local selected = tcfg.key == tab_key
 
             -- set_node_visible 同时移除隐藏页的触摸/滚动响应，避免遮挡选中页。
-            if is_node(entry.listview) then
+            if entry.listview then
                 role.set_node_visible(entry.listview, selected)
             end
 
-            if is_node(entry.label) then
+            if entry.label then
                 -- 文字变色：选中黑 / 未选中白（label 触摸已在 initialize_role 关闭，点击穿透到按钮）
                 role.set_label_color(entry.label, selected and TEXT_SELECTED or TEXT_UNSELECTED, tf(0))
             end
 
-            if is_node(entry.button) then
+            if entry.button then
                 -- 选中底框：用按钮自身不透明度显隐（opacity=0 仍可点击，保证未选中页可被切回）
                 role.set_ui_opacity(entry.button, tf(selected and OPACITY_SELECTED or OPACITY_UNSELECTED))
             end
@@ -109,7 +103,7 @@ function InventoryView.initialize_role(role)
     for _, tcfg in ipairs(TABS) do
         local entry = tabs[tcfg.key]
         -- 关闭标签文字触摸，让点击穿透 label 命中背后的标签按钮。
-        if entry and is_node(entry.label) then
+        if entry and entry.label then
             role.set_node_touch_enabled(entry.label, false)
         end
     end
@@ -124,7 +118,7 @@ function InventoryView.bind_tab_handler(on_select, register_trigger)
     for _, tcfg in ipairs(TABS) do
         local entry = tabs[tcfg.key]
         local button = entry and entry.button
-        if is_node(button) then
+        if button then
             local tab_key = tcfg.key
             register_trigger(
                 { EVENT.EUI_NODE_TOUCH_EVENT, button, TOUCH_CLICK },
