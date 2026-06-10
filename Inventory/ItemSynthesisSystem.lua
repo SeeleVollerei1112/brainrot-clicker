@@ -644,6 +644,39 @@ function ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, cou
     return ItemSynthesisSystem.give_item(role, item_id, output_attrs, nil, count)
 end
 
+---按合成成长曲线推算某物品在指定等级的属性，与逐级合成的产物数值一致
+---（每级套用对应配方的 income_multiplier/income_add）。
+---超出合成上限（max_level）时停在可达的最高级。
+---@param item_id integer
+---@param level integer|nil 缺省或小于 1 时按 1 级
+---@return table<string, integer|string>|nil attrs 物品未配置时返回 nil
+function ItemSynthesisSystem.attrs_at_level(item_id, level)
+    local item = BoothConfig.find_item(item_id)
+    if not item then
+        return nil
+    end
+
+    local attrs = copy_attrs(item.base_attrs)
+    local target_level = math.tointeger(level) or 1
+    local current_level = math.tointeger(attrs.level) or 1
+    local income = math.tointeger(attrs.income_per_second) or 0
+    while current_level < target_level do
+        local recipe = ItemSynthesisConfig.find_recipe(item_id, current_level)
+        if not recipe then
+            break
+        end
+        local result = recipe.result or {}
+        income = math.tointeger(
+            math.floor(income * (result.income_multiplier or 1) + (result.income_add or 0))
+        ) or income
+        current_level = current_level + (math.tointeger(result.level_add) or 1)
+    end
+
+    attrs.level = current_level
+    attrs.income_per_second = income
+    return attrs
+end
+
 ---@param role Role
 ---@param item_id integer|nil
 ---@param level integer|nil

@@ -4,6 +4,7 @@
 -- 落定时弹出中奖提示。
 -- ============================================================
 
+local ItemSynthesisSystem = require("Inventory.ItemSynthesisSystem")
 local LotteryConfig = require("Lottery.LotteryConfig")
 local LotterySystem = require("Lottery.LotterySystem")
 local LotteryView = require("Lottery.LotteryView")
@@ -11,6 +12,34 @@ local UINodes = require("Data.UINodes")
 local AppConfig = require("App.AppConfig")
 
 local LotteryController = {}
+
+---发放中奖物件到玩家持有物（装备栏优先、可堆叠、自动落盘），
+---等级按配置经合成成长曲线折算属性，与合成产物数值一致。
+---@param role Role
+---@param prize LotteryPrize
+---@return string|nil granted_text 发放成功返回 "名字 Lv.N"，未配置/失败返回 nil
+local function grant_prize(role, prize)
+    local reward = prize.reward
+    if not reward then
+        return nil
+    end
+
+    local attrs = ItemSynthesisSystem.attrs_at_level(reward.item_id, reward.level)
+    if not attrs then
+        LuaAPI.log("[LotteryController] 奖励物件未配置: item=" .. tostring(reward.item_id), 1)
+        return nil
+    end
+
+    local equipment = ItemSynthesisSystem.give_item_preferred_slots(role, reward.item_id, attrs, 1)
+    if not equipment then
+        LuaAPI.log("[LotteryController] 奖励发放失败: item=" .. tostring(reward.item_id), 1)
+        return nil
+    end
+
+    LuaAPI.log("[LotteryController] 发放奖励 item=" .. tostring(reward.item_id)
+        .. " level=" .. tostring(attrs.level), 0)
+    return tostring(attrs.name) .. " Lv." .. tostring(attrs.level)
+end
 
 ---@param role Role
 local function handle_spin(role)
@@ -33,8 +62,11 @@ local function handle_spin(role)
     end
 
     LotteryView.play_spin(role, target_index, function()
-        role.show_tips("恭喜获得：" .. result.prize.name, LotteryConfig.TIP_DURATION)
-        -- TODO: 实际发放奖励（接 CurrencySystem 等），当前仅提示。
+        local granted_text = grant_prize(role, result.prize)
+        role.show_tips(
+            "恭喜获得：" .. (granted_text or result.prize.name),
+            LotteryConfig.TIP_DURATION
+        )
     end)
 end
 

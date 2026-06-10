@@ -3,10 +3,15 @@
 -- 转盘抽奖配置：奖励权重 + 转盘画布节点 + 动画节奏。
 -- ============================================================
 
+---@class LotteryPrizeReward
+---@field item_id integer   奖励物件（BoothConfig.ITEMS 的 id，脑红1~5 = 101~105）
+---@field level integer|nil 发放等级（缺省 1；属性按合成成长曲线折算，超出合成上限则封顶）
+
 ---@class LotteryPrize
 ---@field id string
 ---@field name string
 ---@field weight integer
+---@field reward LotteryPrizeReward|nil 中奖发放的物件（nil = 仅提示不发放）
 
 ---@class LotteryCard
 ---@field prize_id string  对应奖励 id（见 PRIZES）
@@ -35,9 +40,9 @@ local LotteryConfig = {
 
     ---@type LotteryPrize[]
     PRIZES = {
-        { id = "common", name = "普通奖励", weight = 70 },
-        { id = "rare", name = "稀有奖励", weight = 25 },
-        { id = "legendary", name = "传说奖励", weight = 5 },
+        { id = "common", name = "普通奖励", weight = 70, reward = { item_id = 101, level = 1 } },
+        { id = "rare", name = "稀有奖励", weight = 25, reward = { item_id = 103, level = 1 } },
+        { id = "legendary", name = "传说奖励", weight = 5, reward = { item_id = 105, level = 2 } },
     },
 
     -- 卡片按从左到右的视觉顺序排列，选中框依此顺序循环。
