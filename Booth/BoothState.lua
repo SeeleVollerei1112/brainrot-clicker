@@ -73,63 +73,6 @@ function BoothState.unlock_zone(state, zone_id)
     return true
 end
 
----重新锁定某展台区（撤销解锁）。默认解锁区不允许被锁，避免开局无可用区。
----主要供调试/重置使用（DebugTools）。
----@param state BoothState
----@param zone_id integer
----@return boolean success
-function BoothState.lock_zone(state, zone_id)
-    if not BoothConfig.find_zone(zone_id) then
-        return false
-    end
-    if zone_id == BoothConfig.DEFAULT_UNLOCKED_ZONE_ID then
-        return false
-    end
-    state.unlocked[zone_id] = nil
-    return true
-end
-
----判定某展台区当前「是否满足解锁条件」。
----
----解锁条件字段（BoothZoneConfig.unlock_condition / unlock_cost）目前留空，
----本函数即为条件判定的接入点：后续策划把条件填进 config 后，在这里读取
----`condition` 求值即可，无需改动调用方。成本(unlock_cost)涉及货币，属于
----有副作用的检查，放在控制层（BoothController.try_unlock_zone）处理。
----@param state BoothState
----@param zone_id integer
----@return boolean ok, string reason
-function BoothState.can_unlock(state, zone_id)
-    if not BoothConfig.find_zone(zone_id) then
-        return false, "zone_not_found"
-    end
-    if BoothState.is_zone_unlocked(state, zone_id) then
-        return false, "already_unlocked"
-    end
-
-    local condition = select(1, BoothConfig.get_unlock(zone_id))
-    -- 条件占位：目前 unlock_condition 为空表，恒视为满足。
-    -- 待处理(策划/玩法)：在此读取 condition 字段做真实判定（前置区、收集数等）。
-    if type(condition) == "table" and next(condition) ~= nil then
-        -- 预留分支：一旦条件非空，默认未实现的条件视为不满足，避免误放行。
-        return false, "condition_unimplemented"
-    end
-
-    return true, "ok"
-end
-
----按解锁条件尝试解锁（满足条件才解锁）。成本扣除由控制层完成。
----@param state BoothState
----@param zone_id integer
----@return boolean success, string reason
-function BoothState.try_unlock(state, zone_id)
-    local ok, reason = BoothState.can_unlock(state, zone_id)
-    if not ok then
-        return false, reason
-    end
-    state.unlocked[zone_id] = true
-    return true, "ok"
-end
-
 ---@param state BoothState
 ---@param zone_id integer
 ---@param booth_index integer
@@ -153,8 +96,6 @@ end
 ---@param preserve_booth_income boolean|nil
 ---@return boolean success
 function BoothState.place_item(state, zone_id, booth_index, item_id, attrs, preserve_booth_income)
-    state.booth_income = state.booth_income or {}
-
     if not BoothState.is_zone_unlocked(state, zone_id) then
         return false
     end
@@ -203,8 +144,6 @@ end
 ---@param booth_index integer
 ---@return boolean removed
 function BoothState.remove_item(state, zone_id, booth_index)
-    state.booth_income = state.booth_income or {}
-
     local zone_placements = state.placements[zone_id]
     if not zone_placements or not zone_placements[booth_index] then
         return false
@@ -214,22 +153,6 @@ function BoothState.remove_item(state, zone_id, booth_index)
     if zone_booth_income then
         zone_booth_income[booth_index] = nil
     end
-    return true
-end
-
----修改已放置物品实例的单个属性。
----@param state BoothState
----@param zone_id integer
----@param booth_index integer
----@param attr string
----@param value BoothAttrValue
----@return boolean success
-function BoothState.set_item_attr(state, zone_id, booth_index, attr, value)
-    local placement = BoothState.get_placement(state, zone_id, booth_index)
-    if not placement then
-        return false
-    end
-    placement.attrs[attr] = value
     return true
 end
 
@@ -253,20 +176,6 @@ function BoothState.zone_income_per_second(state, zone_id)
     return sum
 end
 
----某展台位当前「每秒收益」。
----@param state BoothState
----@param zone_id integer
----@param booth_index integer
----@return integer income_per_second
-function BoothState.booth_income_per_second(state, zone_id, booth_index)
-    local placement = BoothState.get_placement(state, zone_id, booth_index)
-    local per_second = placement and placement.attrs and placement.attrs.income_per_second
-    if type(per_second) ~= "number" then
-        return 0
-    end
-    return math.tointeger(per_second) or 0
-end
-
 ---某展区随时间累计的总收益（整数）。
 ---@param state BoothState
 ---@param zone_id integer
@@ -281,7 +190,6 @@ end
 ---@param booth_index integer
 ---@return integer income_total
 function BoothState.booth_income_total(state, zone_id, booth_index)
-    state.booth_income = state.booth_income or {}
     local zone_booth_income = state.booth_income[zone_id]
     return zone_booth_income and zone_booth_income[booth_index] or 0
 end
@@ -300,10 +208,7 @@ end
 ---@return integer gained 本次累加的总额
 ---@return integer elapsed 实际结算的秒数
 function BoothState.accrue_to(state, now, rate, max_seconds)
-    state.zone_income = state.zone_income or {}
-    state.booth_income = state.booth_income or {}
-
-    local last = state.last_ts or 0
+    local last = state.last_ts
     state.last_ts = now
 
     -- 首次（无基准）只立基准、不结算。

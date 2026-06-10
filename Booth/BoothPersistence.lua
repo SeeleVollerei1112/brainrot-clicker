@@ -7,6 +7,10 @@ Booth/BoothPersistence.lua
 也没有适合这种可变嵌套结构的逐字段表存档，所以这里统一编码为字符串。
 存档读写以 Role 为单位立即生效，不需要额外 commit / flush。
 
+注意：展台存档与背包（Inventory/ItemSynthesisSystem）共用同一存档 blob——
+保存时经 preserve_inventory_blob 读回当前档里的 inventory 字段再改写，
+修改存档结构时须两侧同步。
+
 序列化结构：
   {
     "zones": [1, 2],
@@ -269,7 +273,7 @@ function BoothPersistence.save(role, state)
     end
     local blob = preserve_inventory_blob(role, BoothPersistence.to_json(state))
     role.set_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id, blob)
-    LuaAPI.log("[BoothPersistence] 已保存展台存档: " .. blob, 0)
+    LuaAPI.log("[BoothPersistence] 已保存展台存档 len=" .. tostring(#blob), 0)
 end
 
 ---@param role Role

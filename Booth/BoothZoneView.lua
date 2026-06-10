@@ -154,21 +154,6 @@ function BoothZoneView.initialize()
     head_missing_logged = false
 end
 
--- ---------- 收益 ----------
-
----某展区当前「每秒总收益」与「随时间累计总收益」。
----@param role Role
----@param zone_id integer
----@return integer income_per_second, integer income_total
-function BoothZoneView.compute_zone_income(role, zone_id)
-    local state = controller.get_state(role)
-    if not state then
-        return 0, 0
-    end
-    return BoothState.zone_income_per_second(state, zone_id),
-        BoothState.zone_income_total(state, zone_id)
-end
-
 -- ---------- 头顶 3D 文字 ----------
 
 ---销毁某展台位的头顶界面（若有）。
@@ -181,12 +166,38 @@ local function destroy_head_layer(key)
     end
 end
 
+---写入单个文本节点：每次更新文本；apply_style 时附带设置一次性静态样式
+---（颜色/字号/背景透明度/描边）。
+---@param role Role
+---@param node any
+---@param text string
+---@param color integer
+---@param font_size integer
+---@param style table
+---@param apply_style boolean
+local function apply_label(role, node, text, color, font_size, style, apply_style)
+    role.set_label_text(node, text)
+    if not apply_style then
+        return
+    end
+    local to_fixed = math.tofixed
+    role.set_label_color(node, color, to_fixed(0))
+    role.set_label_font_size(node, font_size, to_fixed(0))
+    role.set_label_background_opacity(node, to_fixed(style.label_background_opacity or 0.0), to_fixed(0))
+    role.set_label_outline_enabled(node, true)
+    role.set_label_outline_color(node, style.outline_color or 0xFF000000)
+    role.set_label_outline_width(node, to_fixed(style.outline_width or 2))
+end
+
 ---把等级/每秒收益/累计收益写进头顶界面的文本节点（对所有可见玩家生效）。
+---静态样式与背景节点处理只在 layer 刚创建时执行一次（apply_style=true），
+---每秒收益 tick 只更新文本。
 ---@param layer any
 ---@param level integer
 ---@param income_per_second integer
 ---@param income_total integer
-local function set_head_text(layer, level, income_per_second, income_total)
+---@param apply_style boolean
+local function set_head_text(layer, level, income_per_second, income_total, apply_style)
     local style = BoothConfig.HEAD_UI.style or {}
     local level_node = get_scene_ui_node(layer, BoothConfig.HEAD_UI.level_node)
     local income_node = get_scene_ui_node(layer, BoothConfig.HEAD_UI.income_node)
@@ -196,46 +207,34 @@ local function set_head_text(layer, level, income_per_second, income_total)
     end
 
     local background_nodes = {}
-    for _, node_name in ipairs(BoothConfig.HEAD_UI.background_nodes or {}) do
-        local node = get_scene_ui_node(layer, node_name)
-        if node then
-            background_nodes[#background_nodes + 1] = node
+    if apply_style then
+        for _, node_name in ipairs(BoothConfig.HEAD_UI.background_nodes or {}) do
+            local node = get_scene_ui_node(layer, node_name)
+            if node then
+                background_nodes[#background_nodes + 1] = node
+            end
         end
     end
 
     for _, role in ipairs(GameAPI.get_all_valid_roles()) do
-        local to_fixed = math.tofixed
         if level_node then
-            role.set_label_text(level_node, (style.level_prefix or "Lv.") .. tostring(level))
-            role.set_label_color(level_node, style.level_color or 0xFFD14D2B, to_fixed(0))
-            role.set_label_font_size(level_node, style.level_font_size or 32, to_fixed(0))
-            role.set_label_background_opacity(level_node, to_fixed(style.label_background_opacity or 0.0), to_fixed(0))
-            role.set_label_outline_enabled(level_node, true)
-            role.set_label_outline_color(level_node, style.outline_color or 0xFF000000)
-            role.set_label_outline_width(level_node, to_fixed(style.outline_width or 2))
+            apply_label(role, level_node,
+                (style.level_prefix or "Lv.") .. tostring(level),
+                style.level_color or 0xFFD14D2B, style.level_font_size or 32, style, apply_style)
         end
         if income_node then
-            role.set_label_text(income_node,
-                (style.income_prefix or "+") .. tostring(income_per_second) .. (style.income_suffix or "/s"))
-            role.set_label_color(income_node, style.income_color or 0xFF2BAFD1, to_fixed(0))
-            role.set_label_font_size(income_node, style.income_font_size or 28, to_fixed(0))
-            role.set_label_background_opacity(income_node, to_fixed(style.label_background_opacity or 0.0), to_fixed(0))
-            role.set_label_outline_enabled(income_node, true)
-            role.set_label_outline_color(income_node, style.outline_color or 0xFF000000)
-            role.set_label_outline_width(income_node, to_fixed(style.outline_width or 2))
+            apply_label(role, income_node,
+                (style.income_prefix or "+") .. tostring(income_per_second) .. (style.income_suffix or "/s"),
+                style.income_color or 0xFF2BAFD1, style.income_font_size or 28, style, apply_style)
         end
         if total_node then
-            role.set_label_text(total_node, (style.total_prefix or "") .. tostring(income_total))
-            role.set_label_color(total_node, style.total_color or 0xFFFFFFFF, to_fixed(0))
-            role.set_label_font_size(total_node, style.total_font_size or 44, to_fixed(0))
-            role.set_label_background_opacity(total_node, to_fixed(style.label_background_opacity or 0.0), to_fixed(0))
-            role.set_label_outline_enabled(total_node, true)
-            role.set_label_outline_color(total_node, style.outline_color or 0xFF000000)
-            role.set_label_outline_width(total_node, to_fixed(style.outline_width or 2))
+            apply_label(role, total_node,
+                (style.total_prefix or "") .. tostring(income_total),
+                style.total_color or 0xFFFFFFFF, style.total_font_size or 44, style, apply_style)
         end
         for _, background_node in ipairs(background_nodes) do
             role.set_node_visible(background_node, style.background_visible == true)
-            role.set_ui_opacity(background_node, to_fixed(style.background_opacity or 0.0))
+            role.set_ui_opacity(background_node, math.tofixed(style.background_opacity or 0.0))
         end
     end
 end
@@ -248,9 +247,8 @@ function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
     local key = slot_key(zone_id, booth_index)
 
     local state = controller.get_state(role)
-    local placement = state and BoothState.get_placement(state, zone_id, booth_index)
-    local unlocked = state and BoothState.is_zone_unlocked(state, zone_id)
-    if not placement or not unlocked then
+    local placement = BoothState.get_placement(state, zone_id, booth_index)
+    if not placement or not BoothState.is_zone_unlocked(state, zone_id) then
         destroy_head_layer(key)
         return
     end
@@ -274,6 +272,7 @@ function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
     end
 
     local layer = head_layer[key]
+    local created = false
     if not layer then
         local off = BoothConfig.HEAD_UI.offset
         layer = stand.create_scene_ui_bind_unit(
@@ -285,6 +284,7 @@ function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
             true   -- 跟随展示台显隐（展区锁定隐藏模型时一并隐藏）
         )
         head_layer[key] = layer
+        created = true
     end
     if not layer then
         return
@@ -294,7 +294,7 @@ function BoothZoneView.refresh_booth_label(role, zone_id, booth_index)
     local level = math.tointeger(attrs.level or 1) or 1
     local income = math.tointeger(attrs.income_per_second or 0) or 0
     local total = BoothState.booth_income_total(state, zone_id, booth_index)
-    set_head_text(layer, level, income, total)
+    set_head_text(layer, level, income, total, created)
 end
 
 -- ---------- 刷新入口 ----------
@@ -310,10 +310,10 @@ function BoothZoneView.refresh_board(role, zone_id)
     end
 
     local state = controller.get_state(role)
-    local unlocked = state and BoothState.is_zone_unlocked(state, zone_id)
     ---@cast board Obstacle
-    if unlocked then
-        local per_second, total = BoothZoneView.compute_zone_income(role, zone_id)
+    if BoothState.is_zone_unlocked(state, zone_id) then
+        local per_second = BoothState.zone_income_per_second(state, zone_id)
+        local total = BoothState.zone_income_total(state, zone_id)
         board.set_billboard_text("每秒总收益: " .. tostring(per_second) .. "\n总收益: " .. tostring(total))
         board.set_billboard_text_color(
             0xFF8A5A12,

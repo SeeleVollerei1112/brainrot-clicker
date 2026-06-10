@@ -13,7 +13,7 @@ name 作为实例展示名保存，支持后续单实例改名或配置改名后
 
 场景对接（运行时实测，2026-06-05）：
   每个展台位在编辑器中各有一个独立的「事件触发区域」(CustomTriggerSpace,
-  prefab key = BOOTH_TRIGGER_KEY)，命名规则为
+  prefab key = 31010112，场景内所有展台触发区共用此 key)，命名规则为
       <展区名>_展示台_<序号>_触发区   （序号从 1 起）
   例如「新手展区_展示台_1_触发区」。代码据此用 LuaAPI.query_unit(name)
   反查触发区域并绑定进出事件，无需在区域上额外配置自定义值。
@@ -24,8 +24,6 @@ name 作为实例展示名保存，支持后续单实例改名或配置改名后
 ---@field id integer
 ---@field name string
 ---@field booth_count integer
----@field unlock_condition table   解锁条件占位（留空待策划填充；空表=无条件）
----@field unlock_cost integer      解锁成本占位（0=免费/暂不消耗）
 
 ---@class BoothItemConfig
 ---@field id integer
@@ -36,9 +34,6 @@ name 作为实例展示名保存，支持后续单实例改名或配置改名后
 local BoothConfig = {
     -- 开局默认解锁的展台区
     DEFAULT_UNLOCKED_ZONE_ID = 1,
-
-    -- 展台位事件触发区域的 prefab 编号（场景内所有展台触发区共用此 key）。
-    BOOTH_TRIGGER_KEY = 31010112,
 
     -- 触发区域命名规则的固定中缀/后缀（拼出 <展区名>_展示台_<序号>_触发区）。
     TRIGGER_NAME_INFIX = "_展示台_",
@@ -112,9 +107,9 @@ local BoothConfig = {
 
     ---@type BoothZoneConfig[]
     ZONES = {
-        { id = 1, name = "新手展区", booth_count = 4, unlock_condition = {}, unlock_cost = 0 },
-        { id = 2, name = "进阶展区", booth_count = 6, unlock_condition = {}, unlock_cost = 0 },
-        { id = 3, name = "大师展区", booth_count = 6, unlock_condition = {}, unlock_cost = 0 },
+        { id = 1, name = "新手展区", booth_count = 4 },
+        { id = 2, name = "进阶展区", booth_count = 6 },
+        { id = 3, name = "大师展区", booth_count = 6 },
     },
 
     ---@type BoothItemConfig[]
@@ -175,29 +170,23 @@ function BoothConfig.is_valid_booth(zone_id, booth_index)
     if not zone then
         return false
     end
-    if type(booth_index) ~= "number" then
-        return false
-    end
     return booth_index >= 0 and booth_index < zone.booth_count
 end
 
----拼出某展台位事件触发区域的场景命名（序号从 1 起 = booth_index + 1）。
+---拼出某展台位事件触发区域的场景命名 = 展台模型名 + 「_触发区」后缀。
 ---@param zone_id integer
 ---@param booth_index integer
 ---@return string|nil name
 function BoothConfig.booth_trigger_name(zone_id, booth_index)
-    local zone = BoothConfig.find_zone(zone_id)
-    if not zone or not BoothConfig.is_valid_booth(zone_id, booth_index) then
+    local stand_name = BoothConfig.booth_stand_name(zone_id, booth_index)
+    if not stand_name then
         return nil
     end
-    return zone.name
-        .. BoothConfig.TRIGGER_NAME_INFIX
-        .. tostring(booth_index + 1)
-        .. BoothConfig.TRIGGER_NAME_SUFFIX
+    return stand_name .. BoothConfig.TRIGGER_NAME_SUFFIX
 end
 
----拼出某展台位「展台模型(展示台)」的场景命名 = <展区名>_展示台_<序号>。
----即触发区域名去掉「_触发区」后缀（序号从 1 起 = booth_index + 1）。
+---拼出某展台位「展台模型(展示台)」的场景命名 = <展区名>_展示台_<序号>
+---（序号从 1 起 = booth_index + 1）。触发区域名在此基础上加「_触发区」后缀。
 ---⚠ 名称约定与触发区一致，但展台模型节点名未经运行时实测，编辑器恢复后需核对。
 ---@param zone_id integer
 ---@param booth_index integer
@@ -231,17 +220,6 @@ function BoothConfig.for_each_booth(callback)
             callback(zone.id, booth_index, BoothConfig.booth_trigger_name(zone.id, booth_index))
         end
     end
-end
-
----获取某展台区的解锁字段（条件占位 + 成本）。
----@param zone_id integer
----@return table|nil unlock_condition, integer|nil unlock_cost
-function BoothConfig.get_unlock(zone_id)
-    local zone = BoothConfig.find_zone(zone_id)
-    if not zone then
-        return nil, nil
-    end
-    return zone.unlock_condition or {}, zone.unlock_cost or 0
 end
 
 return BoothConfig

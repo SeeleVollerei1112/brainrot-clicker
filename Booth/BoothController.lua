@@ -1,14 +1,15 @@
 --[[
 Booth/BoothController.lua
 
-展台存档控制层：负责玩家展台状态的生命周期。
+展台系统的门面 / 编排层。
 
 每个玩家的 BoothState 收归 session 状态片（key="booth"），进入时由
 SessionStateRegistry 工厂读档创建，离开时由 save 钩子保存。这里也暴露
 DebugTools 使用的 role 维度粗粒度操作（内部经 find_session 走 session），
 每次状态变更都会立即保存，方便阶段测试。
 
-这里只处理存档和数据，不放 EUI 与世界放置逻辑。
+编排内容：zone_view 场景表现刷新、interaction / placement 子模块的全局
+初始化与会话生命周期、收益结算与自动存档定时器（自注册）、存档时机。
 ]]
 
 local BoothConfig = require("Booth.BoothConfig")
@@ -27,10 +28,6 @@ SessionStateRegistry.declare("booth", {
         BoothPersistence.save(session.role, session:get_or_create_state("booth"))
     end,
 })
-
--- 收益结算节奏 / 自动存档节奏（秒），供 GameApp 注册定时器使用。
-BoothController.INCOME_TICK_INTERVAL = BoothConfig.INCOME_TICK_INTERVAL
-BoothController.AUTOSAVE_INTERVAL = BoothConfig.AUTOSAVE_INTERVAL
 
 -- 子模块延迟加载。编辑器会把顶层 require 链算进 BoothController 编译成本；
 -- BoothPlacement 会继续加载合成系统，放在真正初始化/调用时再加载，避免启动编译超时。
@@ -93,7 +90,7 @@ function BoothController.initialize(application)
 
     -- 收益结算定时器：仅内存累加 + 刷新公告板
     register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.INCOME_TICK_INTERVAL) },
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothConfig.INCOME_TICK_INTERVAL) },
         function()
             application.sessions.for_each(function(session)
                 BoothController.tick_income(session.role)
@@ -103,7 +100,7 @@ function BoothController.initialize(application)
 
     -- 自动存档定时器
     register_trigger(
-        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothController.AUTOSAVE_INTERVAL) },
+        { EVENT.REPEAT_TIMEOUT, math.tofixed(BoothConfig.AUTOSAVE_INTERVAL) },
         function()
             application.sessions.for_each(function(session)
                 BoothController.save_now(session.role)
@@ -138,8 +135,6 @@ end
 ---@param session PlayerSession
 function BoothController.cleanup_session(session)
     local role = session.role
-    ensure_zone_view_bound()
-    ensure_placement_bound()
     get_placement().clear_role(role)
     get_interaction().cleanup_role(role)
     get_zone_view().clear_labels(role)
@@ -187,9 +182,6 @@ end
 ---@return integer gained 离线收益总额
 ---@return integer elapsed 离线秒数
 function BoothController.settle_offline(role, state)
-    if not state then
-        return 0, 0
-    end
     local gained, elapsed = BoothState.accrue_to(state, GameAPI.get_timestamp(),
         BoothConfig.OFFLINE.rate or 1.0, BoothConfig.OFFLINE.max_seconds or 0)
     -- 即使本次无收益（首次登录立基准 / 无放置物）也要落盘，写下新游标基准。
@@ -226,17 +218,6 @@ function BoothController.tick_income(role)
     end
 end
 
----把玩家当前展台状态序列化为 JSON，供调试查看。
----@param role Role
----@return string json
-function BoothController.dump_json(role)
-    local state = BoothController.get_state(role)
-    if not state then
-        return ""
-    end
-    return BoothPersistence.to_json(state)
-end
-
 -- ---------- 粗粒度状态变更（自动保存，供 DebugTools 使用） ----------
 
 ---强制解锁（不校验条件/成本）。供 DebugTools 后台直接解锁使用。
@@ -249,58 +230,8 @@ function BoothController.unlock_zone(role, zone_id)
         return false
     end
     BoothPersistence.save(role, state)
-    ensure_zone_view_bound()
     get_zone_view().refresh_zone(role, zone_id)
     return true
-end
-
----重新锁定展台区（撤销解锁，默认区不可锁）。供调试/重置使用。
----@param role Role
----@param zone_id integer
----@return boolean success
-function BoothController.lock_zone(role, zone_id)
-    local state = BoothController.get_state(role)
-    if not state or not BoothState.lock_zone(state, zone_id) then
-        return false
-    end
-    BoothPersistence.save(role, state)
-    ensure_zone_view_bound()
-    get_zone_view().refresh_zone(role, zone_id)
-    return true
-end
-
----按解锁条件 + 成本尝试解锁（正式玩法入口）。
----条件判定走 BoothState.can_unlock（目前条件留空恒通过）；成本走 unlock_cost
----字段：若 cost>0 且提供了 spend_fn，则先扣费（扣费失败则不解锁）。这样把
----unlock_condition / unlock_cost 两个字段完整接入，后续填充条件/接入货币即可。
----@param role Role
----@param zone_id integer
----@param spend_fn fun(cost: integer): boolean|nil   可选扣费回调（返回是否扣费成功）
----@return boolean success, string reason
-function BoothController.try_unlock_zone(role, zone_id, spend_fn)
-    local state = BoothController.get_state(role)
-    if not state then
-        return false, "no_state"
-    end
-
-    local ok, reason = BoothState.can_unlock(state, zone_id)
-    if not ok then
-        return false, reason
-    end
-
-    local _, cost = BoothConfig.get_unlock(zone_id)
-    cost = cost or 0
-    if cost > 0 and spend_fn then
-        if not spend_fn(cost) then
-            return false, "insufficient_cost"
-        end
-    end
-
-    BoothState.unlock_zone(state, zone_id)
-    BoothPersistence.save(role, state)
-    ensure_zone_view_bound()
-    get_zone_view().refresh_zone(role, zone_id)
-    return true, "ok"
 end
 
 ---@param role Role
@@ -326,21 +257,6 @@ end
 function BoothController.remove_item(role, zone_id, booth_index)
     local state = BoothController.get_state(role)
     if not state or not BoothState.remove_item(state, zone_id, booth_index) then
-        return false
-    end
-    BoothPersistence.save(role, state)
-    return true
-end
-
----@param role Role
----@param zone_id integer
----@param booth_index integer
----@param attr string
----@param value integer|string
----@return boolean success
-function BoothController.set_item_attr(role, zone_id, booth_index, attr, value)
-    local state = BoothController.get_state(role)
-    if not state or not BoothState.set_item_attr(state, zone_id, booth_index, attr, value) then
         return false
     end
     BoothPersistence.save(role, state)

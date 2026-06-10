@@ -15,6 +15,7 @@ trigger_zone_id -> (zone_id, booth_index) 注册表。
 local BoothConfig = require("Booth.BoothConfig")
 local UINodes = require("Data.UINodes")
 local AppConfig = require("App.AppConfig")
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 local BoothInteraction = {}
 local BoothPlacement = nil
@@ -32,15 +33,14 @@ local booth_by_zone_id = {}
 ---@type table<RoleID, { zone_id: integer, booth_index: integer }>
 local current_booth = {}
 
--- 当前处于展台触发区的玩家对象，用于手持物切换后的按钮刷新。
----@type table<RoleID, Role>
-local current_roles = {}
-
-local place_button = nil
-local recycle_button = nil
-local synthesis_button = nil
-
-local get_role_id = require("Util.RoleUtil").get_role_id
+-- 交互按钮表驱动配置：config_key 对应 BoothConfig.UI 的键，action 为点击后执行的
+-- 放置层操作名，label 用于节点缺失日志；node 在 initialize 时解析填入。
+---@type { config_key: string, action: string, label: string, node: any }[]
+local buttons = {
+    { config_key = "place_button", action = "place", label = "放置" },
+    { config_key = "recycle_button", action = "recycle", label = "回收" },
+    { config_key = "synthesis_button", action = "synthesize_with_selected", label = "合成" },
+}
 
 local function get_placement()
     if not BoothPlacement then
@@ -56,48 +56,33 @@ local function get_zone_view()
     return BoothZoneView
 end
 
----LifeEntity(触发单位) -> 控制它的玩家（非玩家角色返回 nil）。
----@param life_entity any
----@return Role|nil
-local function entity_to_role(life_entity)
-    return life_entity.get_ctrl_role()
-end
-
----按某展台位的占用/背包情况，显隐放置/回收按钮。
+---按某展台位的占用/背包情况，显隐放置/回收/合成按钮。
 ---@param role Role
 ---@param zone_id integer
 ---@param booth_index integer
 local function update_buttons(role, zone_id, booth_index)
     local placement = get_placement()
     local occupied = placement.is_occupied(role, zone_id, booth_index)
-    local can_place = (not occupied) and placement.has_placeable_item(role)
-    local can_synthesize = false
-    if occupied then
-        can_synthesize = select(1, placement.can_synthesize_with_selected(role, zone_id, booth_index))
-    end
-
-    if place_button then
-        role.set_node_visible(place_button, can_place)
-    end
-    if recycle_button then
-        role.set_node_visible(recycle_button, occupied)
-    end
-    if synthesis_button then
-        role.set_node_visible(synthesis_button, can_synthesize)
+    local visible = {
+        place_button = (not occupied) and placement.has_placeable_item(role),
+        recycle_button = occupied,
+        synthesis_button = occupied
+            and placement.can_synthesize_with_selected(role, zone_id, booth_index),
+    }
+    for _, button in ipairs(buttons) do
+        if button.node then
+            role.set_node_visible(button.node, visible[button.config_key] == true)
+        end
     end
 end
 
 ---隐藏所有交互按钮。
 ---@param role Role
 local function hide_buttons(role)
-    if place_button then
-        role.set_node_visible(place_button, false)
-    end
-    if recycle_button then
-        role.set_node_visible(recycle_button, false)
-    end
-    if synthesis_button then
-        role.set_node_visible(synthesis_button, false)
+    for _, button in ipairs(buttons) do
+        if button.node then
+            role.set_node_visible(button.node, false)
+        end
     end
 end
 
@@ -111,7 +96,6 @@ local function on_enter(role, zone_id, booth_index)
         return
     end
     current_booth[role_id] = { zone_id = zone_id, booth_index = booth_index }
-    current_roles[role_id] = role
     update_buttons(role, zone_id, booth_index)
 end
 
@@ -128,7 +112,6 @@ local function on_leave(role, zone_id, booth_index)
     local cur = current_booth[role_id]
     if cur and cur.zone_id == zone_id and cur.booth_index == booth_index then
         current_booth[role_id] = nil
-        current_roles[role_id] = nil
     end
     hide_buttons(role)
 end
@@ -154,7 +137,7 @@ end
 local function bind_zone_triggers(register_trigger)
     local bound, missing = 0, 0
     BoothConfig.for_each_booth(function(zone_id, booth_index, trigger_name)
-        local unit = trigger_name and LuaAPI.query_unit(trigger_name)
+        local unit = LuaAPI.query_unit(trigger_name)
         if not unit then
             missing = missing + 1
             LuaAPI.log("[BoothInteraction] 找不到展台触发区域: " .. tostring(trigger_name), 1)
@@ -163,10 +146,12 @@ local function bind_zone_triggers(register_trigger)
         local zone_unit_id = LuaAPI.get_unit_id(unit)
         booth_by_zone_id[zone_unit_id] = { zone_id = zone_id, booth_index = booth_index }
 
+        -- 触发单位来自引擎事件，非玩家角色 get_ctrl_role 返回 nil，逐层守卫。
         register_trigger(
             { EVENT.ANY_LIFEENTITY_TRIGGER_SPACE, ENTER, zone_unit_id },
             function(event_name, actor, data)
-                local role = entity_to_role(data and data.event_unit)
+                local entity = data and data.event_unit
+                local role = entity and entity.get_ctrl_role()
                 if role then
                     on_enter(role, zone_id, booth_index)
                 end
@@ -175,7 +160,8 @@ local function bind_zone_triggers(register_trigger)
         register_trigger(
             { EVENT.ANY_LIFEENTITY_TRIGGER_SPACE, LEAVE, zone_unit_id },
             function(event_name, actor, data)
-                local role = entity_to_role(data and data.event_unit)
+                local entity = data and data.event_unit
+                local role = entity and entity.get_ctrl_role()
                 if role then
                     on_leave(role, zone_id, booth_index)
                 end
@@ -189,43 +175,21 @@ end
 ---注册放置/回收/合成按钮点击。
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 local function bind_buttons(register_trigger)
-    if place_button then
-        register_trigger(
-            { EVENT.EUI_NODE_TOUCH_EVENT, place_button, TOUCH_CLICK },
-            function(event_name, actor, data)
-                if data and data.role then
-                    run_action_on_current(data.role, get_placement().place)
+    for _, button in ipairs(buttons) do
+        if button.node then
+            local action_name = button.action
+            register_trigger(
+                { EVENT.EUI_NODE_TOUCH_EVENT, button.node, TOUCH_CLICK },
+                function(event_name, actor, data)
+                    if data and data.role then
+                        run_action_on_current(data.role, get_placement()[action_name])
+                    end
                 end
-            end
-        )
-    else
-        LuaAPI.log("[BoothInteraction] 缺少放置按钮节点(待导出): " .. tostring(BoothConfig.UI.place_button), 1)
-    end
-
-    if recycle_button then
-        register_trigger(
-            { EVENT.EUI_NODE_TOUCH_EVENT, recycle_button, TOUCH_CLICK },
-            function(event_name, actor, data)
-                if data and data.role then
-                    run_action_on_current(data.role, get_placement().recycle)
-                end
-            end
-        )
-    else
-        LuaAPI.log("[BoothInteraction] 缺少回收按钮节点(待导出): " .. tostring(BoothConfig.UI.recycle_button), 1)
-    end
-
-    if synthesis_button then
-        register_trigger(
-            { EVENT.EUI_NODE_TOUCH_EVENT, synthesis_button, TOUCH_CLICK },
-            function(event_name, actor, data)
-                if data and data.role then
-                    run_action_on_current(data.role, get_placement().synthesize_with_selected)
-                end
-            end
-        )
-    else
-        LuaAPI.log("[BoothInteraction] 缺少合成按钮节点(待导出): " .. tostring(BoothConfig.UI.synthesis_button), 1)
+            )
+        else
+            LuaAPI.log("[BoothInteraction] 缺少" .. button.label .. "按钮节点(待导出): "
+                .. tostring(BoothConfig.UI[button.config_key]), 1)
+        end
     end
 end
 
@@ -240,10 +204,9 @@ end
 function BoothInteraction.initialize(register_trigger)
     booth_by_zone_id = {}
     current_booth = {}
-    current_roles = {}
-    place_button = UINodes[BoothConfig.UI.place_button]
-    recycle_button = UINodes[BoothConfig.UI.recycle_button]
-    synthesis_button = UINodes[BoothConfig.UI.synthesis_button]
+    for _, button in ipairs(buttons) do
+        button.node = UINodes[BoothConfig.UI[button.config_key]]
+    end
 
     hide_buttons_for_all_roles()
     bind_zone_triggers(register_trigger)
@@ -254,9 +217,6 @@ end
 ---玩家会话创建时：初始隐藏交互按钮。
 ---@param role Role
 function BoothInteraction.initialize_role(role)
-    if not role then
-        return
-    end
     hide_buttons(role)
 end
 
@@ -266,7 +226,6 @@ function BoothInteraction.cleanup_role(role)
     local role_id = get_role_id(role)
     if role_id then
         current_booth[role_id] = nil
-        current_roles[role_id] = nil
     end
 end
 
