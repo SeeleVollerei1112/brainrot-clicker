@@ -110,12 +110,6 @@ local BoothConfig = {
         },
     },
 
-    -- 展台回收目标槽位。默认回到「装备栏」而不是储物栏(BACKPACK)。
-    -- 若编辑器枚举名不同，调整 slot_type_names 的顺序即可；都不可用时才回退 BACKPACK 并打日志。
-    RECYCLE = {
-        slot_type_names = { "EQUIPPED" },
-    },
-
     ---@type BoothZoneConfig[]
     ZONES = {
         { id = 1, name = "新手展区", booth_count = 4, unlock_condition = {}, unlock_cost = 0 },
