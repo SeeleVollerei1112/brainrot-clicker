@@ -40,12 +40,7 @@ local place_button = nil
 local recycle_button = nil
 local synthesis_button = nil
 
----@param role Role
----@return RoleID|nil
-local function get_role_id(role)
-    local ctrl = role and role.get_ctrl_unit()
-    return ctrl and ctrl.get_role_id() or nil
-end
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 local function get_placement()
     if not BoothPlacement then

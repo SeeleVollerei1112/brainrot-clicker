@@ -10,12 +10,7 @@ local PlayerSessionRegistry = {}
 ---@type table<RoleID, PlayerSession>
 local player_sessions = {}
 
----@param role Role
----@return RoleID|nil role_id
-local function get_role_id(role)
-    local control_unit = role and role.get_ctrl_unit()
-    return control_unit and control_unit.get_role_id() or nil
-end
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 ---@param role Role
 ---@return PlayerSession|nil session

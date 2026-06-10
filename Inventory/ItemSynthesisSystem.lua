@@ -42,12 +42,7 @@ local function merge_item_attrs(item, attrs)
     return result
 end
 
----@param role Role|nil
----@return RoleID|nil
-local function get_role_id(role)
-    local character = role and role.get_ctrl_unit()
-    return character and character.get_role_id() or nil
-end
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 ---@param equipment Equipment|nil
 ---@return Role|nil

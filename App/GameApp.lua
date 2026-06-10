@@ -9,6 +9,7 @@ local ControllerRegistry = require("App.ControllerRegistry")
 local PlayerSessionRegistry = require("App.PlayerSessionRegistry")
 local SessionStateRegistry = require("App.SessionStateRegistry")
 local TriggerRegistry = require("App.TriggerRegistry")
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 ---@class PlayerSession
 ---@field role Role 玩家对象
@@ -50,8 +51,7 @@ end
 ---@param role Role
 ---@return PlayerSession|nil session
 function GameApp.get_or_create_player_session(role)
-    local control_unit = role and role.get_ctrl_unit()
-    local role_id = control_unit and control_unit.get_role_id() or nil
+    local role_id = get_role_id(role)
     if not role_id then
         LuaAPI.log("[GameApp] 无法获取 Role ID，跳过玩家会话创建", 1)
         return nil
@@ -77,8 +77,7 @@ end
 
 ---@param role Role
 function GameApp.remove_player_session(role)
-    local control_unit = role and role.get_ctrl_unit()
-    local role_id = control_unit and control_unit.get_role_id() or nil
+    local role_id = get_role_id(role)
     local session = PlayerSessionRegistry.remove_by_role(role)
     if not session then return end
 

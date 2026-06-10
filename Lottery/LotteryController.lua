@@ -12,16 +12,6 @@ local AppConfig = require("App.AppConfig")
 
 local LotteryController = {}
 
----@param parent ENode|nil
----@param name string
----@return ENode|nil node
-local function fetch_child(parent, name)
-    if not parent then
-        return nil
-    end
-    return GameAPI.get_eui_child_by_name(parent, name)
-end
-
 ---@param role Role
 local function handle_spin(role)
     if LotteryView.is_spinning(role) then
@@ -82,7 +72,10 @@ function LotteryController.initialize(application)
     end
 
     -- 转盘画布内的关闭按钮：点击退出转盘画布
-    local close_button = fetch_child(UINodes[LotteryConfig.CANVAS_NAME], LotteryConfig.BUTTONS.close)
+    local lottery_canvas = UINodes[LotteryConfig.CANVAS_NAME]
+    local close_button = lottery_canvas
+        and GameAPI.get_eui_child_by_name(lottery_canvas, LotteryConfig.BUTTONS.close)
+        or nil
     if close_button then
         register_trigger(
             { EVENT.EUI_NODE_TOUCH_EVENT, close_button, AppConfig.TOUCH.CLICK },

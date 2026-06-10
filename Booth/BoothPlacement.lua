@@ -41,12 +41,7 @@ local booth_pos = {}
 
 local recycle_slot_missing_logged = false
 
----@param role Role
----@return RoleID|nil
-local function get_role_id(role)
-    local ctrl = role and role.get_ctrl_unit()
-    return ctrl and ctrl.get_role_id() or nil
-end
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 ---@param zone_id integer
 ---@param booth_index integer
