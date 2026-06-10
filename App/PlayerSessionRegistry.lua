@@ -19,10 +19,10 @@ function PlayerSessionRegistry.find_by_role(role)
     return role_id and player_sessions[role_id] or nil
 end
 
+---@param role_id RoleID
 ---@param session PlayerSession
-function PlayerSessionRegistry.set(session)
-    local role_id = get_role_id(session and session.role)
-    if role_id then player_sessions[role_id] = session end
+function PlayerSessionRegistry.set(role_id, session)
+    player_sessions[role_id] = session
 end
 
 ---@param role Role

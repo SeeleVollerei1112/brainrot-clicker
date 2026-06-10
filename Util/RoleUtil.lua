@@ -10,7 +10,7 @@ local RoleUtil = {}
 ---@return RoleID|nil role_id
 function RoleUtil.get_role_id(role)
     local control_unit = role and role.get_ctrl_unit()
-    return control_unit and control_unit.get_role_id() or nil
+    return control_unit and control_unit.get_role_id()
 end
 
 return RoleUtil

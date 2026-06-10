@@ -10,8 +10,6 @@ App/AppConfig.lua
 local AppConfig = {
     TOUCH = {
         CLICK = 1,
-        PRESS = 2,
-        RELEASE = 3,
     },
 
     APP = {

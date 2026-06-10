@@ -14,7 +14,6 @@ local get_role_id = require("Util.RoleUtil").get_role_id
 ---@class PlayerSession
 ---@field role Role 玩家对象
 ---@field states table<string, any> 各功能状态片（键与工厂见 SessionStateRegistry 声明）
----@field click_canvas_open boolean 点击界面是否打开
 ---@field get_or_create_state fun(self: PlayerSession, key: string): any
 
 local GameApp = {}
@@ -63,11 +62,10 @@ function GameApp.get_or_create_player_session(role)
     session = {
         role = role,
         states = {},
-        click_canvas_open = false,
         get_or_create_state = get_or_create_state,
     }
 
-    PlayerSessionRegistry.set(session)
+    PlayerSessionRegistry.set(role_id, session)
     SessionStateRegistry.restore_all(session)
     ControllerRegistry.setup_session(session)
     register_role_exit_handler(role)
