@@ -97,6 +97,33 @@ local function play_squeeze(role)
     end)
 end
 
+---@param role Role
+local function play_click_animation_event(role)
+    if not role then
+        return
+    end
+
+    local events = character_cfg.animation_events
+    if not events then
+        return
+    end
+
+    if events.reset then
+        role.send_ui_custom_event(events.reset, {})
+    end
+
+    if events.start then
+        local delay_frames = character_cfg.click_animation_start_delay_frames or 0
+        if delay_frames > 0 then
+            LuaAPI.call_delay_frame(delay_frames, function()
+                role.send_ui_custom_event(events.start, {})
+            end)
+        else
+            role.send_ui_custom_event(events.start, {})
+        end
+    end
+end
+
 ---绑定编辑器内的角色节点，并一次性创建皮肤特效节点。
 ---@param canvas ENode
 local function character_initialize(canvas)
@@ -247,7 +274,10 @@ end
 ---@param role Role
 function ClickerView.play_click_feedback(role)
     play_burst(role)
-    play_squeeze(role)
+    play_click_animation_event(role)
+    if character_cfg.use_legacy_squeeze then
+        play_squeeze(role)
+    end
 end
 
 ---玩家离开时清理对应的皮肤状态。

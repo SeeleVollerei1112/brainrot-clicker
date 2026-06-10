@@ -34,8 +34,7 @@ local UpgradeShopSystem = {}
 ---@param growth_percent number
 ---@return number next_price
 local function get_next_price(current_price, growth_percent)
-    local to_fixed = math.tofixed
-    return math.tointeger(to_fixed(current_price) * to_fixed(growth_percent) / to_fixed(100)) + 1
+    return math.tointeger(math.tofixed(current_price) * math.tofixed(growth_percent) / math.tofixed(100)) + 1
 end
 
 ---@param state PlayerGameState
