@@ -2,7 +2,9 @@
 Inventory/ItemSynthesisSystem.lua
 
 背包物品合成系统。
-物品实例属性只写入/读取 Equipment 自定义 KV，不再写入物品描述。
+物品实例属性只写入/读取 Equipment 自定义 KV。
+背包存档与展台（BoothPersistence）共用同一存档 blob，双向 read-merge-write，
+修改存档结构时须两侧同步。
 ]]
 
 -- 与展台共用同一存档槽位（read-merge-write 各管各的字段），槽位以 ArchivesData 为唯一真相
@@ -10,6 +12,8 @@ local BOOTH_ARCHIVE = require("Data.ArchivesData")["展台状态"]
 local BoothConfig = require("Booth.BoothConfig")
 local ItemSynthesisConfig = require("Inventory.ItemSynthesisConfig")
 local Json = require("Util.Json")
+
+local contains_item_id = ItemSynthesisConfig.contains_item_id
 
 local ItemSynthesisSystem = {}
 
@@ -103,6 +107,9 @@ local function get_int_kv(equipment, key)
     if not equipment then
         return 0
     end
+    if equipment.has_kv and not equipment.has_kv(key) then
+        return 0
+    end
     return math.tointeger(equipment.get_kv_by_type(KV_INT, key)) or 0
 end
 
@@ -111,6 +118,9 @@ end
 ---@return string|nil
 local function get_str_kv(equipment, key)
     if not equipment then
+        return nil
+    end
+    if equipment.has_kv and not equipment.has_kv(key) then
         return nil
     end
     local value = equipment.get_kv_by_type(KV_STR, key)
@@ -143,9 +153,6 @@ local function apply_equipment_display(equipment, item_id, attrs)
     LuaAPI.log("[ItemSynthesisSystem] 标记物品 item=" .. tostring(item_id)
         .. " level=" .. tostring(math.tointeger(attrs.level or 1))
         .. " income=" .. tostring(math.tointeger(attrs.income_per_second or 0)), 0)
-end
-
-function ItemSynthesisSystem.initialize()
 end
 
 ---@param equipment Equipment|nil
@@ -270,7 +277,7 @@ local function collect_saved_stacks(role)
         return stacks
     end
 
-    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES or {}) do
+    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES) do
         local list = character.get_equipment_list_by_slot_type(get_slot_type(slot_type_name))
         if type(list) == "table" then
             for _, equipment in ipairs(list) do
@@ -302,7 +309,7 @@ end
 ---@param role Role
 ---@return table[]|nil
 local function load_saved_stacks(role)
-    if not role or not archives_ready() or not role.has_saved_archive() then
+    if not role or not archives_ready() then
         return nil
     end
     local inventory = load_archive_root(role).inventory
@@ -320,7 +327,7 @@ local function destroy_current_booth_items(role)
     end
 
     local targets = {}
-    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES or {}) do
+    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES) do
         local list = character.get_equipment_list_by_slot_type(get_slot_type(slot_type_name))
         if type(list) == "table" then
             for _, equipment in ipairs(list) do
@@ -359,7 +366,7 @@ local function normalize_current_booth_items(role)
         return
     end
 
-    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES or {}) do
+    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES) do
         local list = character.get_equipment_list_by_slot_type(get_slot_type(slot_type_name))
         if type(list) == "table" then
             for _, equipment in ipairs(list) do
@@ -454,7 +461,7 @@ local function collect_materials(character)
         return materials
     end
 
-    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES or {}) do
+    for _, slot_type_name in ipairs(ItemSynthesisConfig.SOURCE_SLOT_TYPE_NAMES) do
         local list = character.get_equipment_list_by_slot_type(get_slot_type(slot_type_name))
         if type(list) == "table" then
             for _, equipment in ipairs(list) do
@@ -483,7 +490,7 @@ end
 local function find_match(materials, requested_item_id, requested_level)
     for _, first in ipairs(materials) do
         if (not requested_item_id or first.item_id == requested_item_id)
-            and (not requested_level or requested_level <= 0 or first.level == requested_level) then
+            and (not requested_level or first.level == requested_level) then
             local recipe = ItemSynthesisConfig.find_recipe(first.item_id, first.level)
             local remaining = recipe and recipe.ingredient_count or 0
             local picked = {}
@@ -512,6 +519,16 @@ local function find_match(materials, requested_item_id, requested_level)
     return nil, nil
 end
 
+---按配方产出规则推进一次收益：income * income_multiplier + income_add，向下取整。
+---@param income integer
+---@param result table
+---@return integer|nil
+local function grow_income(income, result)
+    return math.tointeger(
+        math.floor(income * (result.income_multiplier or 1) + (result.income_add or 0))
+    )
+end
+
 ---@param recipe table
 ---@param materials table[]
 ---@return integer|nil result_item_id
@@ -530,15 +547,8 @@ local function build_result(recipe, materials)
     local result = recipe.result or {}
     local result_attrs = copy_attrs(result_item.base_attrs)
     result_attrs.level = first.level + (result.level_add or 1)
-    result_attrs.income_per_second = math.tointeger(
-        math.floor(first.income_per_second * (result.income_multiplier or 1) + (result.income_add or 0))
-    )
+    result_attrs.income_per_second = grow_income(first.income_per_second, result)
     return result_item.id, result_attrs
-end
-
----@param material table
-local function consume_material(material)
-    ItemSynthesisSystem.consume_equipment(material.equipment, material.consume_count or 1)
 end
 
 ---@param role Role
@@ -564,16 +574,10 @@ function ItemSynthesisSystem.synthesize(role, item_id, level)
     end
 
     for _, material in ipairs(picked) do
-        consume_material(material)
+        ItemSynthesisSystem.consume_equipment(material.equipment, material.consume_count or 1)
     end
 
-    local output = ItemSynthesisSystem.give_item_preferred_slots(
-        role,
-        result_item_id,
-        result_attrs,
-        1,
-        { ItemSynthesisConfig.OUTPUT_SLOT_TYPE_NAME, "BACKPACK" }
-    )
+    local output = ItemSynthesisSystem.give_item_preferred_slots(role, result_item_id, result_attrs, 1)
 
     return {
         success = true,
@@ -586,13 +590,13 @@ function ItemSynthesisSystem.synthesize(role, item_id, level)
     }
 end
 
+---发放物品：先在 装备栏->储物栏 找同属性堆叠合并，找不到则在装备栏新建一件。
 ---@param role Role
 ---@param item_id integer
 ---@param attrs table<string, integer|string>|nil
----@param slot_type_name string|nil
 ---@param count integer|nil
 ---@return Equipment|nil
-function ItemSynthesisSystem.give_item(role, item_id, attrs, slot_type_name, count)
+function ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, count)
     local character = role and role.get_ctrl_unit()
     local item = BoothConfig.find_item(item_id)
     if not character or not item or not item.prefab_id then
@@ -600,48 +604,21 @@ function ItemSynthesisSystem.give_item(role, item_id, attrs, slot_type_name, cou
     end
 
     local output_attrs = merge_item_attrs(item, attrs)
-    local target_slot_type_name = slot_type_name or ItemSynthesisConfig.OUTPUT_SLOT_TYPE_NAME
-    local stack = find_matching_stack_in_slot(character, item_id, output_attrs, target_slot_type_name)
-    if stack then
-        return add_to_stack(stack, item_id, output_attrs, count)
-    end
-
-    local equipment = character.create_equipment_to_slot(item.prefab_id, get_slot_type(target_slot_type_name))
-    ItemSynthesisSystem.attach_attrs(equipment, item_id, output_attrs)
-    set_stack_count(equipment, count or 1)
-    ItemSynthesisSystem.save_role_inventory(role)
-    return equipment
-end
-
----@param role Role
----@param item_id integer
----@param attrs table<string, integer|string>|nil
----@param count integer|nil
----@param slot_type_names string[]|nil
----@return Equipment|nil
-function ItemSynthesisSystem.give_item_preferred_slots(role, item_id, attrs, count, slot_type_names)
-    local character = role and role.get_ctrl_unit()
-    local item = BoothConfig.find_item(item_id)
-    if not character or not item then
-        return nil
-    end
-
-    local output_attrs = merge_item_attrs(item, attrs)
-    local preferred_slots = slot_type_names or { ItemSynthesisConfig.OUTPUT_SLOT_TYPE_NAME, "BACKPACK" }
-    for _, slot_type_name in ipairs(preferred_slots) do
+    for _, slot_type_name in ipairs({ ItemSynthesisConfig.OUTPUT_SLOT_TYPE_NAME, "BACKPACK" }) do
         local stack = find_matching_stack_in_slot(character, item_id, output_attrs, slot_type_name)
         if stack then
             return add_to_stack(stack, item_id, output_attrs, count)
         end
     end
 
-    for _, slot_type_name in ipairs(preferred_slots) do
-        local equipment = ItemSynthesisSystem.give_item(role, item_id, output_attrs, slot_type_name, count)
-        if equipment then
-            return equipment
-        end
-    end
-    return ItemSynthesisSystem.give_item(role, item_id, output_attrs, nil, count)
+    local equipment = character.create_equipment_to_slot(
+        item.prefab_id,
+        get_slot_type(ItemSynthesisConfig.OUTPUT_SLOT_TYPE_NAME)
+    )
+    ItemSynthesisSystem.attach_attrs(equipment, item_id, output_attrs)
+    set_stack_count(equipment, count or 1)
+    ItemSynthesisSystem.save_role_inventory(role)
+    return equipment
 end
 
 ---按合成成长曲线推算某物品在指定等级的属性，与逐级合成的产物数值一致
@@ -666,45 +643,13 @@ function ItemSynthesisSystem.attrs_at_level(item_id, level)
             break
         end
         local result = recipe.result or {}
-        income = math.tointeger(
-            math.floor(income * (result.income_multiplier or 1) + (result.income_add or 0))
-        ) or income
+        income = grow_income(income, result) or income
         current_level = current_level + (math.tointeger(result.level_add) or 1)
     end
 
     attrs.level = current_level
     attrs.income_per_second = income
     return attrs
-end
-
----@param role Role
----@param item_id integer|nil
----@param level integer|nil
----@return boolean can
----@return string reason
-function ItemSynthesisSystem.can_synthesize(role, item_id, level)
-    local character = role and role.get_ctrl_unit()
-    if not character then
-        return false, "no_role"
-    end
-    local recipe = find_match(
-        collect_materials(character),
-        item_id and item_id > 0 and item_id or nil,
-        level and level > 0 and level or nil
-    )
-    return recipe ~= nil, recipe and "ok" or "materials_missing"
-end
-
----@param item_ids integer[]|nil
----@param item_id integer
----@return boolean
-local function contains_item_id(item_ids, item_id)
-    for _, candidate in ipairs(item_ids or {}) do
-        if candidate == item_id then
-            return true
-        end
-    end
-    return false
 end
 
 ---@param recipe table
@@ -724,22 +669,8 @@ local function recipe_matches_pair(recipe, booth_material, held_material)
     if math.tointeger(recipe.max_level or 0) > 0 and booth_material.level >= math.tointeger(recipe.max_level or 0) then
         return false
     end
-
-    local ingredients = recipe.ingredients
-    if type(ingredients) ~= "table" or #ingredients <= 0 then
-        return contains_item_id(recipe.item_ids, booth_material.item_id)
-            and contains_item_id(recipe.item_ids, held_material.item_id)
-    end
-    if #ingredients ~= 2 then
-        return false
-    end
-
-    local first = ingredients[1]
-    local second = ingredients[2]
-    return (contains_item_id(first.item_ids, booth_material.item_id)
-            and contains_item_id(second.item_ids, held_material.item_id))
-        or (contains_item_id(first.item_ids, held_material.item_id)
-            and contains_item_id(second.item_ids, booth_material.item_id))
+    return contains_item_id(recipe.item_ids, booth_material.item_id)
+        and contains_item_id(recipe.item_ids, held_material.item_id)
 end
 
 ---@param item_id integer
@@ -770,7 +701,7 @@ local function preview_pair_result(item_id, attrs, equipment)
         count = 1,
     }
 
-    for _, recipe in ipairs(ItemSynthesisConfig.RECIPES or {}) do
+    for _, recipe in ipairs(ItemSynthesisConfig.RECIPES) do
         if recipe_matches_pair(recipe, booth_material, held_material) then
             local result_item_id, result_attrs = build_result(recipe, { booth_material, held_material })
             if result_item_id and result_attrs then
