@@ -1,30 +1,31 @@
 -- ============================================================
 -- Mall/MallView.lua
--- 内购商城视图：绑定商城画布的静态商品节点、渲染商品数据、
--- 切换标签页(显隐对应 listview)、切换侧边栏标签选中视觉、绑定购买/标签按钮。
+-- 内购商城视图：绑定商城画布的静态商品节点、渲染商品数据、绑定购买按钮。
+-- 侧边栏标签切换/选中视觉/默认选中/点击绑定统一交由 Util/SidebarTabs 处理。
 --
 -- 层级（编辑器勘察确认）：
 --   shop_tab_1(EList) -> shop_row_k -> shop_item_i -> {shop_slot_i(->shop_icon_i),
 --                                       shop_name_i, shop_price_i, shop_desc_i,
 --                                       shop_coin_i, mall_buy_crit_i}
 --   时间页同理，子节点后缀为 _i_1，列表为 shop_tab_1_1。
--- 标签选中视觉：未选中 -> 标签按钮 opacity=0 + 文字白；选中 -> 标签按钮 opacity=1 + 文字黑。
 -- 商品文字不改字号/颜色，沿用编辑器原始样式。
 -- ============================================================
 
 local MallConfig = require("Mall.MallConfig")
 local AppConfig = require("App.AppConfig")
 local UINodes = require("Data.UINodes")
+local SidebarTabs = require("Util.SidebarTabs")
 
 local MallView = {}
 
-local tf = math.tofixed
 local ui = MallConfig.UI
 local TOUCH_CLICK = AppConfig.TOUCH.CLICK
 
 local sidebar = nil
----@type table<string, { config:MallTabConfig, listview:ENode, button:ENode, label:ENode, cards:table }>
+---@type table<string, { cards:table }>
 local tabs = {}
+---@type SidebarTabEntry[]
+local sidebar_tabs = {}
 
 ---取直接子节点（父无效则返回 nil）。
 ---@param parent ENode|nil
@@ -73,12 +74,13 @@ end
 function MallView.initialize()
     sidebar = UINodes[ui.sidebar]
     tabs = {}
+    sidebar_tabs = {}
 
     for _, tcfg in ipairs(MallConfig.TABS) do
         local listview = UINodes[tcfg.tab_node]
         local button = UINodes[tcfg.button] or child(sidebar, tcfg.button)
         local label = UINodes[tcfg.label] or child(button, tcfg.label)
-        local entry = { config = tcfg, listview = listview, button = button, label = label, cards = {} }
+        local entry = { cards = {} }
 
         if listview then
             for _, item in ipairs(tcfg.items) do
@@ -92,26 +94,26 @@ function MallView.initialize()
         end
 
         tabs[tcfg.key] = entry
+        sidebar_tabs[#sidebar_tabs + 1] = {
+            key = tcfg.key,
+            button = button,
+            label = label,
+            listview = listview,
+            default = tcfg.select_default,
+        }
     end
 
     LuaAPI.log("[MallView] 商城静态节点绑定完成", 0)
 end
 
----为单个玩家做一次性设置（仅设置购买按钮文案，不改商品字体）。
+---为单个玩家做一次性设置：标签默认选中/关文字触摸 + 购买按钮文案（不改商品字体）。
 ---@param role Role
 function MallView.initialize_role(role)
-    if not role then
-        return
-    end
+    SidebarTabs.initialize_role(role, sidebar_tabs)
 
     for _, tcfg in ipairs(MallConfig.TABS) do
         local entry = tabs[tcfg.key]
         if entry then
-            -- 关闭标签文字(label)的触摸，让点击穿透 label 命中背后的标签按钮(btn)。
-            -- label 渲染不受影响，仍正常显示文字与选中底色。
-            if entry.label then
-                role.set_node_touch_enabled(entry.label, false)
-            end
             for _, card in pairs(entry.cards) do
                 if card.buy then
                     role.set_button_text(card.buy, ui.buy.text)
@@ -125,10 +127,6 @@ end
 ---@param role Role
 ---@param display_data MallDisplayData
 function MallView.render(role, display_data)
-    if not role or not display_data then
-        return
-    end
-
     for _, tabdd in ipairs(display_data.tabs) do
         local entry = tabs[tabdd.key]
         if entry then
@@ -148,49 +146,11 @@ function MallView.render(role, display_data)
     end
 end
 
----切换到某标签页：显示其 listview、隐藏其它页；
----选中标签按钮不透明(opacity=1)+文字黑，未选中按钮透明(opacity=0)+文字白。
+---切换到某标签页。
 ---@param role Role
 ---@param tab_key string
 function MallView.select_tab(role, tab_key)
-    if not role then
-        return
-    end
-
-    for _, tcfg in ipairs(MallConfig.TABS) do
-        local entry = tabs[tcfg.key]
-        if entry then
-            local selected = tcfg.key == tab_key
-
-            -- 显隐对应页：set_node_visible 会一并移除隐藏页的触摸/滚动响应，
-            -- 避免隐藏页遮挡选中页的点击与列表滑动（透明度方案无法做到，故不用 opacity）。
-            if entry.listview then
-                role.set_node_visible(entry.listview, selected)
-            end
-
-            if entry.label then
-                -- 文字变色：选中黑 / 未选中白（label 触摸已在 initialize_role 关闭，点击穿透到按钮）
-                role.set_label_color(entry.label, selected and ui.tab.text_selected or ui.tab.text_unselected, tf(0))
-            end
-
-            if entry.button then
-                -- 选中底框：用按钮自身不透明度显隐（opacity=0 仍可点击，保证未选中页可被切回）
-                role.set_ui_opacity(entry.button,
-                    tf(selected and ui.tab.btn_opacity_selected or ui.tab.btn_opacity_unselected))
-            end
-        end
-    end
-end
-
----返回默认选中标签键。
----@return string
-function MallView.get_default_tab_key()
-    for _, tcfg in ipairs(MallConfig.TABS) do
-        if tcfg.select_default then
-            return tcfg.key
-        end
-    end
-    return MallConfig.TABS[1].key
+    SidebarTabs.select_tab(role, sidebar_tabs, tab_key)
 end
 
 ---绑定每个商品的购买按钮点击。
@@ -223,24 +183,7 @@ end
 ---@param on_select fun(role: Role, tab_key: string)
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
 function MallView.bind_tab_handler(on_select, register_trigger)
-    for _, tcfg in ipairs(MallConfig.TABS) do
-        local entry = tabs[tcfg.key]
-        local button = entry and entry.button
-        if button then
-            local tab_key = tcfg.key
-            register_trigger(
-                { EVENT.EUI_NODE_TOUCH_EVENT, button, TOUCH_CLICK },
-                function(event_name, actor, data)
-                    local role = data and data.role
-                    if role then
-                        on_select(role, tab_key)
-                    end
-                end
-            )
-        else
-            LuaAPI.log("[MallView] 缺少标签按钮: " .. tostring(tcfg.button), 1)
-        end
-    end
+    SidebarTabs.bind(sidebar_tabs, on_select, register_trigger)
 end
 
 return MallView

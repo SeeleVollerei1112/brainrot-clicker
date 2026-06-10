@@ -21,13 +21,6 @@ SessionStateRegistry.declare("inventory", {
     end,
 })
 
----切换背包侧边栏标签页。
----@param role Role
----@param tab_key string
-local function handle_select(role, tab_key)
-    InventoryView.select_tab(role, tab_key)
-end
-
 ---玩家会话创建时调用：关闭标签文字触摸并应用默认选中。
 ---@param session PlayerSession
 function InventoryController.setup_session(session)
@@ -40,9 +33,8 @@ end
 ---@param application Application
 function InventoryController.initialize(application)
     local register_trigger = application.register_trigger
-    ItemSynthesisSystem.initialize()
     InventoryView.initialize()
-    InventoryView.bind_tab_handler(handle_select, register_trigger)
+    InventoryView.bind_tab_handler(InventoryView.select_tab, register_trigger)
     LuaAPI.log("[InventoryController] 背包侧边栏初始化完成", 0)
 end
 

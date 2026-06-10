@@ -5,7 +5,7 @@
 --   暴击道具(crit) -> 列表视图 shop_tab_1
 --   时间道具(time) -> 列表视图 shop_tab_1_1
 -- 商品数据为【占位配置】，价格/货币/效果均为 TODO，待接入真实内购与游戏逻辑。
--- 道具实际发放通过 MallSystem.set_grant_handler() 注册的钩子完成（预留接口）。
+-- 道具实际发放待接入（见 MallSystem.purchase 的占位日志路径）。
 -- ============================================================
 
 ---@class MallItemConfig
@@ -62,20 +62,9 @@ local MallConfig = {
         },
 
         -- 购买按钮文案（不改字号/颜色，沿用按钮预设原样式）
+        -- 侧边栏标签选中视觉常量统一在 Util/SidebarTabs.lua
         buy = {
             text = "购买",
-        },
-
-        -- 侧边栏标签选中视觉（用标签按钮自身不透明度作为选中底框；按钮始终可点击）：
-        --   未选中 -> 按钮透明(opacity=0) + 文字白色
-        --   选中   -> 按钮不透明(opacity=1) + 文字黑色
-        -- 说明：opacity=0 仅隐藏渲染，按钮仍可点击（不同于 set_node_visible(false)）；
-        --       文字 label 是按钮的同级节点，不受按钮不透明度影响，仍正常显示。
-        tab = {
-            text_selected = 0xFF000000,   -- 选中文字：黑
-            text_unselected = 0xFFFFFFFF, -- 未选中文字：白
-            btn_opacity_selected = 1.0,   -- 选中：标签按钮不透明
-            btn_opacity_unselected = 0.0, -- 未选中：标签按钮透明
         },
     },
 

@@ -2,7 +2,7 @@
 -- Mall/MallSystem.lua
 -- 内购商城纯逻辑层：商品展示数据投影 + 购买入口。
 -- 商城为内购产品，默认无玩家状态依赖（不消耗脑腐值）。
--- 真实下单与道具发放通过 set_grant_handler() 注册的钩子接入（预留接口）。
+-- 购买目前仅记录占位日志，真实下单/发放待接入。
 -- ============================================================
 
 local MallConfig = require("Mall.MallConfig")
@@ -29,16 +29,6 @@ local MallConfig = require("Mall.MallConfig")
 ---@field reason string
 
 local MallSystem = {}
-
----@type fun(role: Role, item: MallItemConfig, tab: MallTabConfig): boolean
-local grant_handler = nil
-
----注册真实发放/下单钩子（预留给游戏逻辑/后端接入）。
----钩子返回 true 表示发放成功。未注册时购买仅记录日志。
----@param handler fun(role: Role, item: MallItemConfig, tab: MallTabConfig): boolean
-function MallSystem.set_grant_handler(handler)
-    grant_handler = handler
-end
 
 ---@param item MallItemConfig
 ---@return MallItemDisplayData
@@ -68,7 +58,7 @@ function MallSystem.get_display_data()
     return { tabs = tabs }
 end
 
----购买一个内购商品。当前仅走预留钩子；真实下单/发放由 grant_handler 实现。
+---购买一个内购商品。当前仅记录占位日志。
 ---@param role Role
 ---@param item_id integer
 ---@return MallPurchaseResult result
@@ -78,18 +68,9 @@ function MallSystem.purchase(role, item_id)
         return { success = false, reason = "invalid_item" }
     end
 
-    -- TODO(策划/后端): 在此接入真实内购下单流程（货币校验、订单、防刷等）。
-    -- 目前直接调用发放钩子作为占位。
-    if grant_handler then
-        local ok = grant_handler(role, item, tab)
-        if not ok then
-            return { success = false, reason = "grant_failed" }
-        end
-        return { success = true, reason = "ok" }
-    end
-
+    -- TODO(策划/后端): 在此接入真实内购下单流程（货币校验、订单、发放、防刷等）。
     LuaAPI.log(
-        "[MallSystem] 购买占位触发（未接发放钩子） tab=" .. tab.key
+        "[MallSystem] 购买占位触发（未接真实内购） tab=" .. tab.key
             .. " item=" .. tostring(item_id) .. " name=" .. item.name,
         0
     )

@@ -12,6 +12,7 @@ local AppConfig = require("App.AppConfig")
 
 local MallController = {}
 
+---@param node ENode|nil
 ---@param event_arguments table
 ---@param callback function
 ---@param register_trigger fun(event_arguments: table, callback: function): integer
@@ -24,26 +25,18 @@ local function bind_button(node, event_arguments, callback, register_trigger, mi
     end
 end
 
----打开商城画布并渲染默认标签页。
+---打开商城画布并渲染默认标签页（默认选中已在 initialize_role 内应用）。
 ---@param role Role
 local function handle_open(role)
     role.send_ui_custom_event(MallConfig.EVENTS.open, {})
     MallView.initialize_role(role)
     MallView.render(role, MallSystem.get_display_data())
-    MallView.select_tab(role, MallView.get_default_tab_key())
 end
 
 ---关闭商城画布。
 ---@param role Role
 local function handle_close(role)
     role.send_ui_custom_event(MallConfig.EVENTS.close, {})
-end
-
----切换侧边栏标签页。
----@param role Role
----@param tab_key string
-local function handle_select(role, tab_key)
-    MallView.select_tab(role, tab_key)
 end
 
 ---处理一次购买。
@@ -55,8 +48,7 @@ local function handle_buy(role, item_id)
         LuaAPI.log("[MallController] 购买失败 item=" .. tostring(item_id) .. " reason=" .. result.reason, 0)
         return
     end
-    -- 占位：真实内购成功后通常刷新货币/背包 UI，待接入游戏逻辑。
-    MallView.render(role, MallSystem.get_display_data())
+    -- 占位：真实内购成功后在此刷新货币/背包 UI，待接入游戏逻辑。
 end
 
 ---玩家会话创建时调用：强制隐藏商城画布并做一次性设置。
@@ -104,7 +96,7 @@ function MallController.initialize(application)
     )
 
     -- 侧边栏标签按钮 + 各商品购买按钮
-    MallView.bind_tab_handler(handle_select, register_trigger)
+    MallView.bind_tab_handler(MallView.select_tab, register_trigger)
     MallView.bind_buy_handler(handle_buy, register_trigger)
 
     LuaAPI.log("[MallController] 内购商城初始化完成", 0)
