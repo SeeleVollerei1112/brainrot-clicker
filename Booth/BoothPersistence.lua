@@ -28,19 +28,13 @@ local Json = require("Util.Json")
 
 local BoothPersistence = {}
 
----@param value any
----@return integer
-local function to_int(value)
-    return math.tointeger(value) or 0
-end
-
 ---@param attr string
 ---@param value any
 ---@param attrs table<string, integer|string>
 local function set_decoded_attr(attr, value, attrs)
     if attr == "attack" then
         if attrs.income_per_second == nil then
-            attrs.income_per_second = to_int(value)
+            attrs.income_per_second = math.tointeger(value) or 0
         end
         return
     end
@@ -48,7 +42,7 @@ local function set_decoded_attr(attr, value, attrs)
     if type(value) == "string" then
         attrs[attr] = value
     elseif type(value) == "number" then
-        attrs[attr] = to_int(value)
+        attrs[attr] = math.tointeger(value) or 0
     end
 end
 
@@ -122,14 +116,14 @@ function BoothPersistence.to_json(state)
 
     local zone_income = {}
     for zone_id, total in pairs(state.zone_income or {}) do
-        zone_income[tostring(zone_id)] = to_int(total)
+        zone_income[tostring(zone_id)] = math.tointeger(total) or 0
     end
 
     local booth_income = {}
     for zone_id, zone_booth_income in pairs(state.booth_income or {}) do
         local zone_out = {}
         for booth_index, total in pairs(zone_booth_income) do
-            zone_out[tostring(booth_index)] = to_int(total)
+            zone_out[tostring(booth_index)] = math.tointeger(total) or 0
         end
         booth_income[tostring(zone_id)] = zone_out
     end
@@ -139,7 +133,7 @@ function BoothPersistence.to_json(state)
         placements = placements,
         zone_income = zone_income,
         booth_income = booth_income,
-        last_ts = to_int(state.last_ts or 0),
+        last_ts = math.tointeger(state.last_ts) or 0,
     })
 end
 
@@ -187,13 +181,13 @@ function BoothPersistence.from_json(str)
         placements = {},
         zone_income = {},
         booth_income = {},
-        last_ts = to_int(data.last_ts),
+        last_ts = math.tointeger(data.last_ts) or 0,
     }
 
     -- 已解锁展区：只保留当前配置里仍存在的 id。
     if type(data.zones) == "table" then
         for _, zone_id in ipairs(data.zones) do
-            local id = to_int(zone_id)
+            local id = math.tointeger(zone_id) or 0
             if BoothConfig.find_zone(id) then
                 state.unlocked[id] = true
             end
@@ -209,7 +203,7 @@ function BoothPersistence.from_json(str)
             if state.unlocked[zone_id] and type(zone_placements) == "table" then
                 for booth_key, instance in pairs(zone_placements) do
                     local booth_index = key_to_int(booth_key)
-                    local item_id = type(instance) == "table" and to_int(instance.item_id) or 0
+                    local item_id = type(instance) == "table" and (math.tointeger(instance.item_id) or 0) or 0
                     if BoothConfig.is_valid_booth(zone_id, booth_index)
                         and BoothConfig.find_item(item_id) then
                         local attrs = {}
@@ -230,7 +224,7 @@ function BoothPersistence.from_json(str)
         for zone_key, total in pairs(data.zone_income) do
             local zone_id = key_to_int(zone_key)
             if BoothConfig.find_zone(zone_id) then
-                state.zone_income[zone_id] = to_int(total)
+                state.zone_income[zone_id] = math.tointeger(total) or 0
             end
         end
     end
@@ -245,7 +239,7 @@ function BoothPersistence.from_json(str)
                 for booth_key, total in pairs(zone_booth_income) do
                     local booth_index = key_to_int(booth_key)
                     if zone_placements[booth_index] then
-                        zone_out[booth_index] = to_int(total)
+                        zone_out[booth_index] = math.tointeger(total) or 0
                     end
                 end
                 state.booth_income[zone_id] = zone_out
