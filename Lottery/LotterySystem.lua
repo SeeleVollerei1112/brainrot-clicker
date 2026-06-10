@@ -1,6 +1,6 @@
 -- ============================================================
 -- Lottery/LotterySystem.lua
--- Pure weighted lottery selection.
+-- 纯权重抽奖逻辑。
 -- ============================================================
 
 local LotteryConfig = require("Lottery.LotteryConfig")
@@ -12,34 +12,17 @@ local LotterySystem = {}
 ---@field prize LotteryPrize|nil
 ---@field reason string|nil
 
----Draw one prize using the configured integer weights.
+---按配置的整数权重抽取一个奖励。
 ---@return LotteryDrawResult result
 function LotterySystem.draw()
     local total_weight = 0
-
     for _, prize in ipairs(LotteryConfig.PRIZES) do
-        if type(prize.weight) ~= "number" or prize.weight <= 0 or prize.weight % 1 ~= 0 then
-            return {
-                success = false,
-                prize = nil,
-                reason = "invalid_prize_weight",
-            }
-        end
-
         total_weight = total_weight + prize.weight
     end
 
-    if total_weight <= 0 then
-        return {
-            success = false,
-            prize = nil,
-            reason = "empty_prize_pool",
-        }
-    end
-
+    -- roll ∈ [1, total_weight]，必落在某个奖励的累计权重区间内
     local roll = GameAPI.random_int(1, total_weight)
     local cumulative_weight = 0
-
     for _, prize in ipairs(LotteryConfig.PRIZES) do
         cumulative_weight = cumulative_weight + prize.weight
         if roll <= cumulative_weight then
@@ -50,15 +33,9 @@ function LotterySystem.draw()
             }
         end
     end
-
-    return {
-        success = false,
-        prize = nil,
-        reason = "roll_out_of_range",
-    }
 end
 
----Resolve which card (1-based index in LotteryConfig.CARDS) shows the given prize.
+---解析给定奖励对应的卡片（LotteryConfig.CARDS 中的 1 起始下标）。
 ---@param prize_id string
 ---@return integer|nil index
 function LotterySystem.index_of_prize(prize_id)

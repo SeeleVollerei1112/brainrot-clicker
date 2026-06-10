@@ -128,7 +128,7 @@ function LotteryController.initialize(application)
     end
 
     register_trigger(
-        { EVENT.EUI_NODE_TOUCH_EVENT, spin_button, LotteryConfig.TOUCH_CLICK },
+        { EVENT.EUI_NODE_TOUCH_EVENT, spin_button, AppConfig.TOUCH.CLICK },
         function(event_name, actor, data)
             if data and data.role then
                 handle_spin(data.role)

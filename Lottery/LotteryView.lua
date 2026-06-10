@@ -20,9 +20,8 @@ local LotteryView = {}
 local FRAME_PREFIX = "选中框_"
 
 -- 解析后的共享节点引用（显隐是 per-Role 的，节点本身全局共享）
-local canvas = nil
 local button = nil
----@type { name:string, card:ENode|nil, frame:ENode|nil }[]
+---@type { frame:ENode|nil }[]
 local cards = {}
 
 -- 全局生命周期代：GAME_INIT / shutdown 时自增，使在途延迟回调失效
@@ -48,20 +47,25 @@ function LotteryView.initialize()
     last_index_by_role = {}
     shown_index_by_role = {}
 
-    canvas = UINodes[LotteryConfig.CANVAS_NAME]
     button = UINodes[LotteryConfig.BUTTON_NAME]
 
     cards = {}
     for index, card in ipairs(LotteryConfig.CARDS) do
         local frame_name = FRAME_PREFIX .. card.card
         local frame = UINodes[frame_name]
-        cards[index] = {
-            name = card.card,
-            card = UINodes[card.card],
-            frame = frame,
-        }
+        cards[index] = { frame = frame }
         if not frame then
             LuaAPI.log("[LotteryView] 缺少选中框节点: " .. frame_name, 1)
+        end
+    end
+end
+
+---对该玩家隐藏全部选中框。
+---@param role Role
+local function hide_all_frames(role)
+    for _, entry in ipairs(cards) do
+        if entry.frame then
+            role.set_node_visible(entry.frame, false)
         end
     end
 end
@@ -74,11 +78,7 @@ function LotteryView.initialize_role(role)
         return
     end
 
-    for _, entry in ipairs(cards) do
-        if entry.frame then
-            role.set_node_visible(entry.frame, false)
-        end
-    end
+    hide_all_frames(role)
 
     is_spinning_by_role[role_id] = false
     spin_generation_by_role[role_id] = 0
@@ -94,11 +94,7 @@ function LotteryView.cleanup_role(role)
         return
     end
 
-    for _, entry in ipairs(cards) do
-        if entry.frame then
-            role.set_node_visible(entry.frame, false)
-        end
-    end
+    hide_all_frames(role)
 
     is_spinning_by_role[role_id] = nil
     spin_generation_by_role[role_id] = nil

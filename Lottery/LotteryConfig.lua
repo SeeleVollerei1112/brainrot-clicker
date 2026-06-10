@@ -35,7 +35,6 @@ local LotteryConfig = {
         close = "关闭",
     },
 
-    TOUCH_CLICK = 1,
     TIP_DURATION = 2.0,
 
     ---@type LotteryPrize[]
