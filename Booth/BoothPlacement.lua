@@ -7,7 +7,7 @@ Booth/BoothPlacement.lua
 
 红线（用户约定）：不使用 drop（丢弃）功能，放置一律用
   GameAPI.create_equipment(prefab, pos) 把物品创建到指定区域；
-  回收用 character.create_equipment_to_slot(prefab, RECYCLE_SLOT) 回到配置槽位。
+  回收经 ItemSynthesisSystem.give_item_preferred_slots 回到 装备栏->储物栏。
 
 运行时句柄（world_equipment）只在内存维护、不入档：会话开始时按存档里的
 placements 重新 spawn（spawn_saved）。展台位的世界坐标按触发区域名反查
@@ -39,14 +39,7 @@ local world_equipment = {}
 -- 展台位世界坐标缓存：booth_pos["zone|booth"] = Vector3
 local booth_pos = {}
 
-local recycle_slot_missing_logged = false
-
----@param role Role
----@return RoleID|nil
-local function get_role_id(role)
-    local ctrl = role and role.get_ctrl_unit()
-    return ctrl and ctrl.get_role_id() or nil
-end
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 ---@param zone_id integer
 ---@param booth_index integer
@@ -108,22 +101,6 @@ local function destroy_equipment(equipment)
     if equipment then
         equipment.destroy_equipment()
     end
-end
-
----@return any slot_type
-local function get_recycle_slot_type()
-    for _, slot_name in ipairs(BoothConfig.RECYCLE.slot_type_names or {}) do
-        local slot_type = Enums.EquipmentSlotType[slot_name]
-        if slot_type ~= nil then
-            return slot_type
-        end
-    end
-
-    if not recycle_slot_missing_logged then
-        recycle_slot_missing_logged = true
-        LuaAPI.log("[BoothPlacement] 找不到装备栏槽位枚举，回收暂回退到 BACKPACK；请检查 BoothConfig.RECYCLE", 1)
-    end
-    return BACKPACK
 end
 
 ---从玩家背包里挑一件「可放置」的物品（优先当前选中格）。

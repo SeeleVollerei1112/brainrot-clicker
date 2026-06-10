@@ -1,11 +1,12 @@
 --[[
 Booth/BoothController.lua
 
-展台存档控制层：负责玩家展台状态的生命周期和角色维度状态表。
+展台存档控制层：负责玩家展台状态的生命周期。
 
-每个玩家持有一份 BoothState（以 role_id 为键），进入时读取，离开时保存。
-接入方式与 Lottery / Inventory 控制器一致。这里也暴露 DebugTools 使用的
-粗粒度操作，每次状态变更都会立即保存，方便阶段测试。
+每个玩家的 BoothState 收归 session 状态片（key="booth"），进入时由
+SessionStateRegistry 工厂读档创建，离开时由 save 钩子保存。这里也暴露
+DebugTools 使用的 role 维度粗粒度操作（内部经 find_session 走 session），
+每次状态变更都会立即保存，方便阶段测试。
 
 这里只处理存档和数据，不放 EUI 与世界放置逻辑。
 ]]
@@ -13,8 +14,19 @@ Booth/BoothController.lua
 local BoothConfig = require("Booth.BoothConfig")
 local BoothState = require("Booth.BoothState")
 local BoothPersistence = require("Booth.BoothPersistence")
+local SessionStateRegistry = require("App.SessionStateRegistry")
 
 local BoothController = {}
+
+-- 展台状态片：进场读档创建，离场保存（与 Inventory 共用槽位，串行 save 不破坏合并语义）。
+SessionStateRegistry.declare("booth", {
+    create = function(session)
+        return BoothPersistence.load(session.role)
+    end,
+    save = function(session)
+        BoothPersistence.save(session.role, session:get_or_create_state("booth"))
+    end,
+})
 
 -- 收益结算节奏 / 自动存档节奏（秒），供 GameApp 注册定时器使用。
 BoothController.INCOME_TICK_INTERVAL = BoothConfig.INCOME_TICK_INTERVAL
@@ -28,15 +40,8 @@ local BoothPlacement = nil
 local zone_view_bound = false
 local placement_bound = false
 
----@type table<RoleID, BoothState>
-local state_by_role_id = {}
-
----@param role Role
----@return RoleID|nil role_id
-local function get_role_id(role)
-    local control_unit = role and role.get_ctrl_unit()
-    return control_unit and control_unit.get_role_id() or nil
-end
+---@type fun(role: Role): PlayerSession|nil 由 initialize 注入（application.sessions.find_by_role）
+local find_session = nil
 
 local function get_zone_view()
     if not BoothZoneView then
@@ -80,6 +85,7 @@ end
 ---@param application Application
 function BoothController.initialize(application)
     local register_trigger = application.register_trigger
+    find_session = application.sessions.find_by_role
 
     ensure_zone_view_bound()
     get_zone_view().initialize()
@@ -110,13 +116,8 @@ end
 ---初始隐藏交互按钮、按存档重建世界放置物、刷新所有展区场景表现。
 ---@param session PlayerSession
 function BoothController.setup_session(session)
-    local role = session and session.role
-    local role_id = get_role_id(role)
-    if not role_id then
-        return
-    end
-    local state = BoothPersistence.load(role)
-    state_by_role_id[role_id] = state
+    local role = session.role
+    local state = session:get_or_create_state("booth")
 
     -- 离线收益结算放在刷新展现之前，让公告板直接显示结算后的总收益。
     local offline_gain, offline_sec = BoothController.settle_offline(role, state)
@@ -132,52 +133,27 @@ function BoothController.setup_session(session)
     end
 end
 
----@param role Role
-function BoothController.initialize_role(role)
-    BoothController.setup_session({ role = role })
-end
-
----玩家离开时编排子模块清理（销毁世界放置物、清交互记录），再保存并移除展台状态。
+---玩家离开时编排子模块清理（销毁世界放置物、清交互记录）。
+---状态保存由 SessionStateRegistry 的 save 钩子在清理后统一执行。
 ---@param session PlayerSession
 function BoothController.cleanup_session(session)
-    local role = session and session.role
-    local role_id = get_role_id(role)
-    if not role_id then
-        return
-    end
-
+    local role = session.role
     ensure_zone_view_bound()
     ensure_placement_bound()
     get_placement().clear_role(role)
     get_interaction().cleanup_role(role)
     get_zone_view().clear_labels(role)
-
-    local state = state_by_role_id[role_id]
-    if state then
-        BoothPersistence.save(role, state)
-    end
-    state_by_role_id[role_id] = nil
 end
 
----@param role Role
-function BoothController.cleanup_role(role)
-    BoothController.cleanup_session({ role = role })
-end
-
----获取玩家当前展台状态；不存在时现场读取。
+---获取玩家当前展台状态（经 session 状态片，未创建时由工厂读档创建）。
 ---@param role Role
 ---@return BoothState|nil state
 function BoothController.get_state(role)
-    local role_id = get_role_id(role)
-    if not role_id then
+    local session = find_session and find_session(role)
+    if not session then
         return nil
     end
-    local state = state_by_role_id[role_id]
-    if not state then
-        state = BoothPersistence.load(role)
-        state_by_role_id[role_id] = state
-    end
-    return state
+    return session:get_or_create_state("booth")
 end
 
 ---只读查询某个展台位上的放置物。

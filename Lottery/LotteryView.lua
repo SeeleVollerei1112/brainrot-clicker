@@ -38,18 +38,7 @@ local last_index_by_role = {}
 ---@type table<RoleID, integer>  当前对该玩家点亮的框下标
 local shown_index_by_role = {}
 
----@param name string
----@return ENode|nil
-local function node(name)
-    return UINodes[name]
-end
-
----@param role Role
----@return RoleID|nil role_id
-local function get_role_id(role)
-    local control_unit = role and role.get_ctrl_unit()
-    return control_unit and control_unit.get_role_id() or nil
-end
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 ---绑定转盘画布与各卡片的选中框节点。GAME_INIT 时调用一次。
 function LotteryView.initialize()
@@ -59,16 +48,16 @@ function LotteryView.initialize()
     last_index_by_role = {}
     shown_index_by_role = {}
 
-    canvas = node(LotteryConfig.CANVAS_NAME)
-    button = node(LotteryConfig.BUTTON_NAME)
+    canvas = UINodes[LotteryConfig.CANVAS_NAME]
+    button = UINodes[LotteryConfig.BUTTON_NAME]
 
     cards = {}
     for index, card in ipairs(LotteryConfig.CARDS) do
         local frame_name = FRAME_PREFIX .. card.card
-        local frame = node(frame_name)
+        local frame = UINodes[frame_name]
         cards[index] = {
             name = card.card,
-            card = node(card.card),
+            card = UINodes[card.card],
             frame = frame,
         }
         if not frame then

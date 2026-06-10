@@ -12,16 +12,6 @@ local AppConfig = require("App.AppConfig")
 
 local LotteryController = {}
 
----@param parent ENode|nil
----@param name string
----@return ENode|nil node
-local function fetch_child(parent, name)
-    if not parent then
-        return nil
-    end
-    return GameAPI.get_eui_child_by_name(parent, name)
-end
-
 ---@param role Role
 local function handle_spin(role)
     if LotteryView.is_spinning(role) then
@@ -82,7 +72,10 @@ function LotteryController.initialize(application)
     end
 
     -- 转盘画布内的关闭按钮：点击退出转盘画布
-    local close_button = fetch_child(UINodes[LotteryConfig.CANVAS_NAME], LotteryConfig.BUTTONS.close)
+    local lottery_canvas = UINodes[LotteryConfig.CANVAS_NAME]
+    local close_button = lottery_canvas
+        and GameAPI.get_eui_child_by_name(lottery_canvas, LotteryConfig.BUTTONS.close)
+        or nil
     if close_button then
         register_trigger(
             { EVENT.EUI_NODE_TOUCH_EVENT, close_button, AppConfig.TOUCH.CLICK },
@@ -115,31 +108,13 @@ end
 ---为加入的玩家初始化转盘视图（隐藏选中框、重置该玩家转动状态）。
 ---@param session PlayerSession
 function LotteryController.setup_session(session)
-    local role = session and session.role
-    if not role then
-        return
-    end
-    LotteryView.initialize_role(role)
-end
-
----@param role Role
-function LotteryController.initialize_role(role)
-    LotteryController.setup_session({ role = role })
+    LotteryView.initialize_role(session.role)
 end
 
 ---玩家离开时清理其转盘视图状态。
 ---@param session PlayerSession
 function LotteryController.cleanup_session(session)
-    local role = session and session.role
-    if not role then
-        return
-    end
-    LotteryView.cleanup_role(role)
-end
-
----@param role Role
-function LotteryController.cleanup_role(role)
-    LotteryController.cleanup_session({ role = role })
+    LotteryView.cleanup_role(session.role)
 end
 
 return LotteryController

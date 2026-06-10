@@ -5,7 +5,8 @@ Inventory/ItemSynthesisSystem.lua
 物品实例属性只写入/读取 Equipment 自定义 KV，不再写入物品描述。
 ]]
 
-local ArchiveKeys = require("Data.ArchiveKeys")
+-- 与展台共用同一存档槽位（read-merge-write 各管各的字段），槽位以 ArchivesData 为唯一真相
+local BOOTH_ARCHIVE = require("Data.ArchivesData")["展台状态"]
 local BoothConfig = require("Booth.BoothConfig")
 local ItemSynthesisConfig = require("Inventory.ItemSynthesisConfig")
 local Json = require("Util.Json")
@@ -19,12 +20,6 @@ local KV_NAME = "booth_name"
 local KV_INT = Enums.ValueType.Int
 local KV_STR = Enums.ValueType.Str
 local BACKPACK = Enums.EquipmentSlotType.BACKPACK
-
----@param value any
----@return integer
-local function to_int(value)
-    return math.tointeger(value) or 0
-end
 
 ---@param attrs table<string, integer|string>|nil
 ---@return table<string, integer|string>
@@ -47,12 +42,7 @@ local function merge_item_attrs(item, attrs)
     return result
 end
 
----@param role Role|nil
----@return RoleID|nil
-local function get_role_id(role)
-    local character = role and role.get_ctrl_unit()
-    return character and character.get_role_id() or nil
-end
+local get_role_id = require("Util.RoleUtil").get_role_id
 
 ---@param equipment Equipment|nil
 ---@return Role|nil
@@ -77,7 +67,7 @@ local function stack_count(equipment)
     if not equipment then
         return 1
     end
-    local count = to_int(equipment.get_current_stack_num())
+    local count = math.tointeger(equipment.get_current_stack_num()) or 0
     if count <= 0 then
         return 1
     end
@@ -90,12 +80,12 @@ local function set_stack_count(equipment, count)
     if not equipment then
         return
     end
-    local target = to_int(count)
+    local target = math.tointeger(count) or 0
     if target <= 0 then
         target = 1
     end
 
-    local max_stack = to_int(equipment.get_max_stack_num())
+    local max_stack = math.tointeger(equipment.get_max_stack_num()) or 0
     if max_stack > 0 and max_stack < target then
         equipment.change_max_stack_size(target - max_stack)
     end
@@ -113,7 +103,7 @@ local function get_int_kv(equipment, key)
     if not equipment then
         return 0
     end
-    return to_int(equipment.get_kv_by_type(KV_INT, key))
+    return math.tointeger(equipment.get_kv_by_type(KV_INT, key)) or 0
 end
 
 ---@param equipment Equipment|nil
@@ -134,9 +124,9 @@ end
 ---@param item_id integer
 ---@param attrs table<string, integer|string>
 local function write_attrs_kv(equipment, item_id, attrs)
-    equipment.set_kv_by_type(KV_INT, KV_ITEM_ID, to_int(item_id))
-    equipment.set_kv_by_type(KV_INT, KV_LEVEL, to_int(attrs.level or 1))
-    equipment.set_kv_by_type(KV_INT, KV_INCOME_PER_SECOND, to_int(attrs.income_per_second or 0))
+    equipment.set_kv_by_type(KV_INT, KV_ITEM_ID, math.tointeger(item_id))
+    equipment.set_kv_by_type(KV_INT, KV_LEVEL, math.tointeger(attrs.level or 1))
+    equipment.set_kv_by_type(KV_INT, KV_INCOME_PER_SECOND, math.tointeger(attrs.income_per_second or 0))
     if attrs.name then
         equipment.set_kv_by_type(KV_STR, KV_NAME, tostring(attrs.name))
     end
@@ -148,11 +138,11 @@ end
 local function apply_equipment_display(equipment, item_id, attrs)
     local item = BoothConfig.find_item(item_id)
     local name = attrs.name or (item and item.base_attrs and item.base_attrs.name) or "脑红"
-    equipment.set_name(tostring(name) .. " Lv." .. tostring(to_int(attrs.level or 1)))
+    equipment.set_name(tostring(name) .. " Lv." .. tostring(math.tointeger(attrs.level or 1)))
     write_attrs_kv(equipment, item_id, attrs)
     LuaAPI.log("[ItemSynthesisSystem] 标记物品 item=" .. tostring(item_id)
-        .. " level=" .. tostring(to_int(attrs.level or 1))
-        .. " income=" .. tostring(to_int(attrs.income_per_second or 0)), 0)
+        .. " level=" .. tostring(math.tointeger(attrs.level or 1))
+        .. " income=" .. tostring(math.tointeger(attrs.income_per_second or 0)), 0)
 end
 
 function ItemSynthesisSystem.initialize()
@@ -215,8 +205,8 @@ end
 local function same_stack_attrs(left, right)
     return left ~= nil
         and right ~= nil
-        and to_int(left.level or 1) == to_int(right.level or 1)
-        and to_int(left.income_per_second or 0) == to_int(right.income_per_second or 0)
+        and math.tointeger(left.level or 1) == math.tointeger(right.level or 1)
+        and math.tointeger(left.income_per_second or 0) == math.tointeger(right.income_per_second or 0)
 end
 
 ---@param role Role
@@ -225,7 +215,7 @@ local function load_archive_root(role)
     if not role or not role.has_saved_archive() then
         return {}
     end
-    local blob = role.get_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id)
+    local blob = role.get_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id)
     if type(blob) ~= "string" or blob == "" then
         return {}
     end
@@ -251,7 +241,7 @@ end
 ---@param attrs table<string, integer|string>
 ---@param count integer
 local function append_saved_stack(stacks, slot_type_name, item_id, attrs, count)
-    local safe_count = to_int(count)
+    local safe_count = math.tointeger(count) or 0
     if safe_count <= 0 then
         safe_count = 1
     end
@@ -259,7 +249,7 @@ local function append_saved_stack(stacks, slot_type_name, item_id, attrs, count)
         if stack.slot == slot_type_name
             and stack.item_id == item_id
             and same_stack_attrs(stack.attrs, attrs) then
-            stack.count = to_int(stack.count) + safe_count
+            stack.count = (math.tointeger(stack.count) or 0) + safe_count
             return
         end
     end
@@ -305,7 +295,7 @@ function ItemSynthesisSystem.save_role_inventory(role)
         stacks = collect_saved_stacks(role),
     }
     local blob = Json.encode(data)
-    role.set_archive_by_type(ArchiveKeys.BOOTH_BLOB.type, ArchiveKeys.BOOTH_BLOB.id, blob)
+    role.set_archive_by_type(BOOTH_ARCHIVE.vType, BOOTH_ARCHIVE.id, blob)
     LuaAPI.log("[ItemSynthesisSystem] 已保存合成物品栏: " .. blob, 0)
 end
 
@@ -350,7 +340,7 @@ end
 ---@param stack table
 local function restore_saved_stack(role, stack)
     local character = role and role.get_ctrl_unit()
-    local item_id = to_int(stack and stack.item_id)
+    local item_id = math.tointeger(stack and stack.item_id) or 0
     local item = BoothConfig.find_item(item_id)
     if not character or not item or not item.prefab_id then
         return
@@ -428,7 +418,7 @@ end
 ---@return Equipment
 local function add_to_stack(equipment, item_id, attrs, count)
     ItemSynthesisSystem.attach_attrs(equipment, item_id, attrs)
-    set_stack_count(equipment, stack_count(equipment) + to_int(count or 1))
+    set_stack_count(equipment, stack_count(equipment) + math.tointeger(count or 1))
     ItemSynthesisSystem.save_role_inventory(get_equipment_role(equipment))
     return equipment
 end
@@ -442,7 +432,7 @@ function ItemSynthesisSystem.consume_equipment(equipment, count)
     end
 
     local role = get_equipment_role(equipment)
-    local consume_count = to_int(count or 1)
+    local consume_count = math.tointeger(count or 1)
     if consume_count <= 0 then
         consume_count = 1
     end
@@ -474,8 +464,8 @@ local function collect_materials(character)
                         equipment = equipment,
                         item_id = item_id,
                         attrs = attrs,
-                        level = to_int(attrs.level or 1),
-                        income_per_second = to_int(attrs.income_per_second or 0),
+                        level = math.tointeger(attrs.level or 1),
+                        income_per_second = math.tointeger(attrs.income_per_second or 0),
                         count = stack_count(equipment),
                     }
                 end
@@ -540,7 +530,7 @@ local function build_result(recipe, materials)
     local result = recipe.result or {}
     local result_attrs = copy_attrs(result_item.base_attrs)
     result_attrs.level = first.level + (result.level_add or 1)
-    result_attrs.income_per_second = to_int(
+    result_attrs.income_per_second = math.tointeger(
         math.floor(first.income_per_second * (result.income_multiplier or 1) + (result.income_add or 0))
     )
     return result_item.id, result_attrs
@@ -590,8 +580,8 @@ function ItemSynthesisSystem.synthesize(role, item_id, level)
         reason = "ok",
         recipe_id = recipe.id,
         item_id = result_item_id,
-        level = to_int(result_attrs.level or 1),
-        income_per_second = to_int(result_attrs.income_per_second or 0),
+        level = math.tointeger(result_attrs.level or 1),
+        income_per_second = math.tointeger(result_attrs.income_per_second or 0),
         equipment = output,
     }
 end
@@ -689,7 +679,7 @@ end
 ---@param held_material table
 ---@return boolean
 local function recipe_matches_pair(recipe, booth_material, held_material)
-    if to_int(recipe.ingredient_count or 2) ~= 2 then
+    if math.tointeger(recipe.ingredient_count or 2) ~= 2 then
         return false
     end
     if recipe.same_item_id ~= false and booth_material.item_id ~= held_material.item_id then
@@ -698,7 +688,7 @@ local function recipe_matches_pair(recipe, booth_material, held_material)
     if recipe.same_level ~= false and booth_material.level ~= held_material.level then
         return false
     end
-    if to_int(recipe.max_level or 0) > 0 and booth_material.level >= to_int(recipe.max_level or 0) then
+    if math.tointeger(recipe.max_level or 0) > 0 and booth_material.level >= math.tointeger(recipe.max_level or 0) then
         return false
     end
 
@@ -734,16 +724,16 @@ local function preview_pair_result(item_id, attrs, equipment)
     local booth_material = {
         item_id = item_id,
         attrs = booth_attrs,
-        level = to_int(booth_attrs.level or 1),
-        income_per_second = to_int(booth_attrs.income_per_second or 0),
+        level = math.tointeger(booth_attrs.level or 1),
+        income_per_second = math.tointeger(booth_attrs.income_per_second or 0),
         count = 1,
     }
     local held_material = {
         equipment = equipment,
         item_id = held_item_id,
         attrs = held_attrs,
-        level = to_int(held_attrs.level or 1),
-        income_per_second = to_int(held_attrs.income_per_second or 0),
+        level = math.tointeger(held_attrs.level or 1),
+        income_per_second = math.tointeger(held_attrs.income_per_second or 0),
         count = 1,
     }
 
@@ -757,8 +747,8 @@ local function preview_pair_result(item_id, attrs, equipment)
                     recipe_id = recipe.id,
                     item_id = result_item_id,
                     attrs = result_attrs,
-                    level = to_int(result_attrs.level or 1),
-                    income_per_second = to_int(result_attrs.income_per_second or 0),
+                    level = math.tointeger(result_attrs.level or 1),
+                    income_per_second = math.tointeger(result_attrs.income_per_second or 0),
                     held_equipment = equipment,
                 }
             end
